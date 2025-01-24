@@ -428,18 +428,59 @@ export default function App() {
 
   // Check for existing session
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-    });
+    const initAuth = async () => {
+      // Clear any stale error states
+      setLoadError(null);
+      
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error('Session error:', error);
+          setUser(null);
+          return;
+        }
+        
+        // Only set user if we have valid session data
+        if (session?.user) {
+          console.log('Valid session found');
+          setUser(session.user);
+        } else {
+          console.log('No active session');
+          setUser(null);
+        }
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+          async (event, session) => {
+            console.log('Auth state changed:', event);
+            if (event === 'SIGNED_OUT' || event === 'USER_DELETED' || event === 'TOKEN_REFRESHED') {
+              // Clear any application data
+              setSavedTrees([]);
+              setTree(null);
+              setLoadError(null);
+            }
+            
+            // Only update user if we have valid session data
+            if (session?.user) {
+              setUser(session.user);
+            } else {
+              setUser(null);
+            }
+          }
+        );
 
-    return () => subscription.unsubscribe();
-  });
+        return () => subscription.unsubscribe();
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+        // Clear all state on error
+        setUser(null);
+        setSavedTrees([]);
+        setTree(null);
+        setLoadError('Fehler bei der Authentifizierung');
+      }
+    };
+
+    void initAuth();
+  }, []); // Only run on mount
 
   // Load saved trees when user logs in
   useEffect(() => {
@@ -647,14 +688,29 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      // First clear all application state
       setUser(null);
       setSavedTrees([]);
       setTree(null);
+      
+      // Then sign out from Supabase
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Signout error:', error);
+        // Even if there's an error, clear local storage
+        window.localStorage.removeItem('supabase-auth');
+        // Force reload to ensure clean state
+        window.location.reload();
+        return;
+      }
+      
+      // Force reload to ensure clean state
+      window.location.reload();
     } catch (error) {
       console.error('Fehler beim Abmelden:', error);
-      alert('Fehler beim Abmelden. Bitte versuchen Sie es erneut.');
+      // Clear local storage and reload as last resort
+      window.localStorage.removeItem('supabase-auth');
+      window.location.reload();
     }
   };
 

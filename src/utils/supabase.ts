@@ -30,6 +30,13 @@ const supabaseConfig = {
           if (url.includes('/auth/v1/token')) {
             const data = await response.clone().json();
             if (!response.ok) {
+              // Handle session expiry
+              if (response.status === 401) {
+                // Clear local storage and reload page
+                window.localStorage.removeItem('supabase-auth');
+                window.location.reload();
+                return response;
+              }
               if (response.status === 400 && data.error_description?.includes('invalid')) {
                 throw new Error('Ungültige Anmeldedaten. Bitte überprüfen Sie Ihre E-Mail und Ihr Passwort.');
               }
@@ -41,8 +48,10 @@ const supabaseConfig = {
         } catch (error) {
           lastError = error;
           if (attempt < MAX_RETRIES - 1) {
-            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (attempt + 1)));
-            continue;
+            if (error.message.includes('fetch') || error.message.includes('network')) {
+              await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (attempt + 1)));
+              continue;
+            }
           }
           throw error;
         }

@@ -14,7 +14,9 @@ export function Auth() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    
+    let retryCount = 0;
+    const maxRetries = 3;
+
     // Trim whitespace from inputs
     const trimmedEmail = email.trim();
     const trimmedPassword = password.trim();
@@ -39,65 +41,80 @@ export function Auth() {
     }
 
     try {
-      // Clear any existing sessions first
-      await supabase.auth.signOut();
+      const tryAuth = async () => {
+        try {
+          if (mode === 'register') {
+            const { data, error } = await supabase.auth.signUp({
+              email: trimmedEmail,
+              password: trimmedPassword,
+              options: {
+                emailRedirectTo: window.location.origin,
+                data: { email: trimmedEmail }
+              }
+            });
+            
+            if (error) throw error;
+            if (data.user) {
+              // Automatically sign in after registration
+              const { error: signInError } = await supabase.auth.signInWithPassword({
+                email: trimmedEmail,
+                password: trimmedPassword
+              });
+              
+              if (signInError) throw signInError;
+              return;
+            }
+          } else {
+            const { error } = await supabase.auth.signInWithPassword({
+              email: trimmedEmail,
+              password: trimmedPassword
+            });
+            
+            if (error) throw error;
+          }
+        } catch (error) {
+          if (retryCount < maxRetries && 
+              (error.message.includes('network') || error.message.includes('failed to fetch'))) {
+            retryCount++;
+            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+            return tryAuth();
+          }
+          throw error;
+        }
+      };
 
-      if (mode === 'register') {
-        const { data, error } = await supabase.auth.signUp({
-          email: trimmedEmail,
-          password: trimmedPassword,
-          options: {
-            emailRedirectTo: window.location.origin
-          }
-        });
-        
-        if (error) {
-          if (error.message.includes('User already registered')) {
-            setError('Diese E-Mail-Adresse ist bereits registriert. Bitte melden Sie sich an.');
-          } else {
-            throw error;
-          }
-        } else if (data.user) {
-          // Erfolgreiche Registrierung
-          setMode('login');
-          setError('Registrierung erfolgreich! Sie können sich jetzt anmelden.');
-        }
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: trimmedEmail,
-          password: trimmedPassword
-        });
-        
-        if (error) {
-          if (error.message.includes('Ungültige Anmeldedaten') || 
-              error.message.includes('Invalid login credentials') ||
-              error.message.includes('Email not found')) {
-            setError(
-              <span>
-                Kein Konto mit dieser E-Mail-Adresse gefunden.{' '}
-                <button
-                  onClick={() => setMode('register')}
-                  className="text-indigo-600 hover:text-indigo-800 underline font-medium"
-                >
-                  Jetzt registrieren
-                </button>
-              </span>
-            );
-          } else if (error.message.includes('Email not confirmed')) {
-            setError('Bitte bestätigen Sie zuerst Ihre E-Mail-Adresse');
-          } else if (error.message.includes('network')) {
-            setError('Netzwerkfehler. Bitte überprüfen Sie Ihre Internetverbindung.');
-          } else {
-            setError(`Anmeldefehler: ${error.message}`);
-          }
-        }
-      }
+      await tryAuth();
     } catch (error) {
       console.error('Auth error:', error);
-      const errorMessage = error instanceof Error 
-        ? error.message 
-        : 'Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.';
-      setError(errorMessage);
+      
+      if (error.message.includes('User already registered')) {
+        setError('Diese E-Mail-Adresse ist bereits registriert. Bitte melden Sie sich an.');
+      } else if (error.message.includes('Invalid login credentials') || 
+                error.message.includes('Email not found')) {
+        setError(
+          <span>
+            Kein Konto mit dieser E-Mail-Adresse gefunden.{' '}
+            <button
+              onClick={() => setMode('register')}
+              className="text-indigo-600 hover:text-indigo-800 underline font-medium"
+            >
+              Jetzt registrieren
+            </button>
+          </span>
+        );
+      } else if (error.message.includes('Email not confirmed')) {
+        setError('Bitte bestätigen Sie zuerst Ihre E-Mail-Adresse');
+      } else if (error.message.includes('network') || error.message.includes('fetch')) {
+        if (retryCount >= maxRetries) {
+          setError('Verbindungsfehler. Bitte überprüfen Sie Ihre Internetverbindung.');
+        } else {
+          setError('Verbindungsfehler. Versuche erneut...');
+          setTimeout(() => handleAuth(e), 1000);
+          return;
+        }
+      } else {
+        setError(`Anmeldefehler: ${error.message}`);
+      }
     } finally {
       setLoading(false);
     }
