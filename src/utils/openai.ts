@@ -38,20 +38,30 @@ export { chunkDocumentContext };
 export const createProperties = (
   title: string,
   shorttitle: string,
+  alternative_titles?: {
+    grundbildend?: string;
+    allgemeinbildend?: string;
+    berufsbildend?: string;
+    akademisch?: string;
+  },
   description: string,
   keywords: string[],
   disciplineUri: string = "",
   educationalContextUri: string = ""
 ): Properties => ({
   ccm_collectionshorttitle: [shorttitle],
-  ccm_taxonid: disciplineUri ? [disciplineUri] : ["http://w3id.org/openeduhub/vocabs/discipline/460"],
+  ccm_taxonid: [disciplineUri || "http://w3id.org/openeduhub/vocabs/discipline/460"],
   cm_title: [title],
+  cm_alternative_titles: alternative_titles || {
+    grundbildend: title,
+    allgemeinbildend: title,
+    berufsbildend: title,
+    akademisch: title
+  },
   ccm_educationalintendedenduserrole: ["http://w3id.org/openeduhub/vocabs/intendedEndUserRole/teacher"],
-  ccm_educationalcontext: educationalContextUri 
-    ? [educationalContextUri] 
-    : ["http://w3id.org/openeduhub/vocabs/educationalContext/sekundarstufe_1"],
+  ccm_educationalcontext: [educationalContextUri || "http://w3id.org/openeduhub/vocabs/educationalContext/sekundarstufe_1"],
   cm_description: [description],
-  cclom_general_keyword: keywords
+  cclom_general_keyword: Array.isArray(keywords) ? keywords : []
 });
 
 export const generateStructuredText = async (
@@ -91,24 +101,39 @@ export const generateStructuredText = async (
     const openai = new OpenAI({
       apiKey,
       dangerouslyAllowBrowser: true,
-      timeout: 30000,
+      timeout: 60000, // Increase timeout to 60 seconds
       maxRetries: 3
     });
 
-    try {
-      const completion = await openai.chat.completions.create({
-        model: apiModel,
-        messages: [
-          { role: 'system', content: BASE_INSTRUCTIONS },
-          { role: 'user', content: truncatedPrompt }
-        ],
-        max_tokens: 12000,
-        temperature: 0.7
-      });
+    const makeRequest = async (retries = 3): Promise<any> => {
+      try {
+        const completion = await openai.chat.completions.create({
+          model: apiModel,
+          messages: [
+            { role: 'system', content: BASE_INSTRUCTIONS },
+            { role: 'user', content: truncatedPrompt }
+          ],
+          max_tokens: 12000,
+          temperature: 0.7
+        });
 
-      if (!completion.choices[0]?.message?.content) {
-        throw new OpenAIError('Keine gültige Antwort von der OpenAI API erhalten');
+        if (!completion.choices[0]?.message?.content) {
+          throw new OpenAIError('Keine gültige Antwort von der OpenAI API erhalten');
+        }
+
+        return completion;
+      } catch (error) {
+        if (retries > 0) {
+          console.log(`Request failed, retrying... (${retries} attempts left)`);
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
+          return makeRequest(retries - 1);
+        }
+        throw error;
       }
+    };
+
+    try {
+      const completion = await makeRequest();
       
       const content = completion.choices[0].message.content.trim();
       console.log('Rohantwort von OpenAI:', content);
@@ -133,6 +158,14 @@ export const generateStructuredText = async (
           typeof item === 'object' &&
           typeof item.title === 'string' &&
           typeof item.shorttitle === 'string' &&
+          (item.alternative_titles === undefined || (
+            typeof item.alternative_titles === 'object' &&
+            Object.entries(item.alternative_titles).every(
+              ([key, value]) => 
+                ['grundbildend', 'allgemeinbildend', 'berufsbildend', 'akademisch'].includes(key) &&
+                typeof value === 'string'
+            )
+          )) &&
           typeof item.description === 'string' &&
           Array.isArray(item.keywords)
         );
@@ -140,6 +173,17 @@ export const generateStructuredText = async (
         if (validTopics.length === 0) {
           throw new OpenAIError('Die API-Antwort enthält keine gültigen Themen');
         }
+
+        // Ensure all topics have alternative_titles
+        return validTopics.map(topic => ({
+          ...topic,
+          alternative_titles: topic.alternative_titles || {
+            grundbildend: topic.title,
+            allgemeinbildend: topic.title,
+            berufsbildend: topic.title,
+            akademisch: topic.title
+          }
+        }));
 
         return validTopics;        
       } catch (parseError) {
@@ -166,6 +210,8 @@ export const generateStructuredText = async (
       if (error instanceof OpenAI.APIError) {
         const message = error.status === 401 
           ? 'Der API Key ist ungültig. Bitte überprüfen Sie Ihre Eingabe.'
+          : error.status === 408 || error.message.includes('timeout')
+          ? 'Die Anfrage hat zu lange gedauert. Bitte versuchen Sie es erneut.'
           : error.status === 404
           ? 'Das ausgewählte Modell ist nicht verfügbar. Bitte wählen Sie ein anderes Modell.'
           : error.status === 429
@@ -179,7 +225,13 @@ export const generateStructuredText = async (
       } else if (error instanceof OpenAIError) {
         throw error;
       } else {
-        throw new OpenAIError(`Fehler bei der Textgenerierung: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`);
+        const errorMessage = error instanceof Error ? error.message : 'Unbekannter Fehler';
+        console.error('Detailed error:', error);
+        throw new OpenAIError(
+          `Fehler bei der Textgenerierung: ${errorMessage}. ` +
+          'Bitte versuchen Sie es erneut. Falls der Fehler weiterhin besteht, ' +
+          'überprüfen Sie Ihre Internetverbindung und den API-Key.'
+        );
       }
     }
   } catch (error) {

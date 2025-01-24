@@ -2,19 +2,100 @@
 
 A powerful web application for generating and managing hierarchical topic trees, specifically designed for educational content structuring. Built with React, TypeScript, and Supabase.
 
-## Features
+## Core Features
 
-- **AI-Powered Topic Generation**: Generate structured topic trees using OpenAI's GPT models
-- **Document Processing**: Upload and process PDF, DOCX, RTF, and TXT files
-- **Interactive Tree Editor**: Edit, add, and delete nodes in the topic tree
-- **Multiple Knowledge Sources**:
-  - AI Knowledge Only
-  - AI + Documents
-  - Documents Only
-- **Export Options**: Download trees as JSON or ASCII text
-- **User Authentication**: Secure user accounts with email/password
-- **Database Storage**: Persistent storage of topic trees and documents
-- **Responsive Design**: Works on desktop and mobile devices
+### AI-Powered Topic Generation
+- Multiple AI models support (GPT-4o-mini, GPT-4o)
+- Configurable number of main topics, subtopics, and curriculum topics
+- Intelligent topic hierarchy generation
+- Context-aware topic suggestions
+- Sector-specific terminology adaptation
+
+### Document Processing
+- Support for multiple file formats:
+  - PDF (with text extraction)
+  - DOCX (with formatting preservation)
+  - RTF
+  - TXT
+- Semantic chunking for large documents
+- Embedding-based relevance analysis
+- Automatic document categorization
+- Sector-specific content analysis
+
+### Knowledge Sources
+- AI Knowledge Only: Pure AI-generated topic trees
+- AI + Documents: Combined knowledge from AI and uploaded documents
+- Documents Only: Topic trees based solely on document content
+- Documents with Sorting: Intelligent document analysis with sector-based categorization
+- Manual Creation: Custom topic tree creation
+
+### Interactive Tree Editor
+- Visual tree structure editor
+- Real-time updates
+- Drag-and-drop organization
+- Node editing capabilities:
+  - Title and short title
+  - Descriptions
+  - Keywords
+  - Sector-specific alternative titles
+- Multi-level hierarchy support
+
+### Educational Sector Support
+- Grundbildend (Basic Education)
+- Allgemeinbildend (General Education)
+- Berufsbildend (Vocational Education)
+- Akademisch (Academic Education)
+
+### View Modes
+- Tree View: Traditional hierarchical display
+- ASCII View: Text-based tree visualization
+- Sector Comparison: Side-by-side view of different sectors
+
+### Export Options
+- JSON export for full tree data
+- ASCII tree export for plain text representation
+- Category lists export for document analysis results
+
+### User Management
+- Secure email/password authentication
+- Personal topic tree storage
+- Document management
+- Data deletion options
+
+### Special Categories
+- Optional "Allgemeines" (General) section
+  - AI-generated or hardcoded
+  - Sector-specific content
+- Optional "Methodik und Didaktik" (Methodology and Didactics) section
+  - AI-generated or hardcoded
+  - Teaching methods and approaches
+
+## Technical Features
+
+### Document Processing
+- Efficient text extraction from PDFs
+- DOCX processing with Mammoth.js
+- RTF and TXT support
+- Automatic text chunking
+- Embedding generation with Transformers.js
+- Semantic similarity analysis
+- Automatic sector classification
+
+### Database Integration
+- Supabase backend
+- Real-time updates
+- Row Level Security
+- Full-text search capabilities
+- Document metadata storage
+- User data isolation
+
+### UI/UX
+- Responsive design
+- Loading states and progress indicators
+- Error handling and user feedback
+- Intuitive navigation
+- Modern, clean interface
+- Tailwind CSS styling
 
 ## Prerequisites
 
@@ -55,81 +136,74 @@ npm run dev
 ```
 src/
 ├── components/         # React components
+│   ├── Auth.tsx       # Authentication component
+│   ├── DocumentUpload.tsx # Document processing
+│   ├── TopicForm.tsx  # Main form component
+│   └── TreeView.tsx   # Tree visualization
 ├── constants/         # Constants and mappings
-├── types/            # TypeScript type definitions
+│   ├── mappings.ts   # Educational sector mappings
+│   └── prompts.ts    # AI prompt templates
+├── types/            # TypeScript definitions
+│   ├── TopicTree.ts  # Tree structure types
+│   └── supabase.ts   # Database types
 ├── utils/            # Utility functions
+│   ├── documentProcessor.ts # Document handling
+│   ├── openai.ts     # AI integration
+│   ├── supabase.ts   # Database client
+│   └── treeUtils.ts  # Tree manipulation
 └── App.tsx           # Main application component
 ```
-
-## Key Components
-
-- **Auth**: User authentication component
-- **TopicForm**: Main form for generating topic trees
-- **TreeView**: Interactive tree visualization and editing
-- **DocumentUpload**: Document processing and management
-
-## Features in Detail
-
-### Topic Generation
-- Configurable number of main topics, subtopics, and curriculum topics
-- Support for different educational contexts and disciplines
-- Optional sections for general information and methodology
-
-### Document Processing
-- PDF text extraction with PDF.js
-- DOCX processing with Mammoth.js
-- RTF and TXT support
-- Semantic chunking and embedding generation
-
-### Tree Editing
-- Add/edit/delete nodes at any level
-- Edit all node properties (title, short title, description, keywords)
-- Real-time updates
-- Unsaved changes detection
 
 ## Database Schema
 
 ### Topic Trees
-- Stores hierarchical topic structures
-- Links to associated documents
-- User-specific storage
+```sql
+CREATE TABLE topic_trees (
+  id uuid PRIMARY KEY,
+  title text,
+  tree_data jsonb,
+  created_at timestamptz,
+  user_id uuid,
+  document_ids text[]
+);
+```
 
 ### Documents
-- Stores processed document content
-- Supports full-text search
-- Maintains file metadata
-
-## Security
-
-- Row Level Security (RLS) enabled
-- User-specific data isolation
-- Secure authentication flow
-- Protected API endpoints
-
-## Development
-
-### Available Scripts
-
-- `npm run dev`: Start development server
-- `npm run build`: Build for production
-- `npm run preview`: Preview production build
-- `npm run lint`: Run ESLint
-
-### Technology Stack
-
-- React 18
-- TypeScript
-- Vite
-- Tailwind CSS
-- Supabase
-- OpenAI API
-- PDF.js
-- Transformers.js
+```sql
+CREATE TABLE documents (
+  id uuid PRIMARY KEY,
+  title text,
+  content text,
+  file_type text,
+  created_at timestamptz,
+  user_id uuid,
+  metadata jsonb
+);
+```
 
 ## Production Deployment
 
 The application is deployed on Netlify and can be accessed at:
 https://visionary-mandazi-1f971b.netlify.app
+
+## Security Features
+
+- Row Level Security (RLS) enabled
+- User data isolation
+- Secure authentication flow
+- Protected API endpoints
+- Safe document processing
+- Input validation
+- Error handling
+
+## Performance Optimizations
+
+- Efficient document chunking
+- Optimized embedding generation
+- Lazy loading of components
+- Caching strategies
+- Minimized API calls
+- Efficient tree rendering
 
 ## License
 
@@ -142,3 +216,7 @@ MIT License
 3. Commit your changes
 4. Push to the branch
 5. Create a Pull Request
+
+## Support
+
+For support, please open an issue in the repository or contact the development team.

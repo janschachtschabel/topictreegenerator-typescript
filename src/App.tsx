@@ -1,12 +1,37 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import { pipeline, env, type Pipeline, type PipelineType } from '@xenova/transformers';
 import { supabase } from './utils/supabase';
-import { useState, useEffect } from 'react';
-import { Loader2, Trash2, LogOut } from 'lucide-react';
+import { useState, useEffect, ReactNode } from 'react';
+import { Loader2, Trash2, LogOut, Settings, FileText, Eye } from 'lucide-react';
 import { Auth } from './components/Auth';
 import TopicForm from './components/TopicForm';
 import TreeView from './components/TreeView';
 import type { TopicTree, Collection } from './types/TopicTree';
+
+type View = 'generate' | 'preview';
+
+interface TabProps {
+  icon: ReactNode;
+  label: string;
+  isActive: boolean;
+  onClick: () => void;
+}
+
+function Tab({ icon, label, isActive, onClick }: TabProps) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200 ${
+        isActive 
+          ? 'bg-indigo-100 text-indigo-700' 
+          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+      }`}
+    >
+      {icon}
+      <span className="ml-2">{label}</span>
+    </button>
+  );
+}
 
 // Configure Transformers.js with more conservative settings
 env.backends.onnx.wasm.numThreads = 1;
@@ -384,6 +409,9 @@ export async function processDocument(file: File): Promise<string> {
 }
 
 export default function App() {
+  const [showAISettings, setShowAISettings] = useState(false);
+  const [apiKey, setApiKey] = useState('');
+  const [model, setModel] = useState('gpt-4o-mini');
   const [tree, setTree] = useState<TopicTree | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [user, setUser] = useState<any>(null);
@@ -391,6 +419,7 @@ export default function App() {
   const [isLoadingTrees, setIsLoadingTrees] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [currentView, setCurrentView] = useState<View>('generate');
   const [savedTrees, setSavedTrees] = useState<Array<{
     id: string;
     title: string;
@@ -665,20 +694,110 @@ export default function App() {
       <div className="bg-white shadow">
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
           <h1 className="text-2xl font-bold text-gray-900">
-            Themenbaum Generator
+            {currentView === 'generate' ? 'Themenbaum Generator' : 'Themenbäume'}
           </h1>
-          <button
-            onClick={handleLogout}
-            className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors duration-200"
-          >
-            <LogOut className="w-4 h-4 mr-2" />
-            Abmelden
-          </button>
+          <div className="flex items-center space-x-4">
+            <div className="flex space-x-2 mr-4">
+              <Tab
+                icon={<FileText className="w-4 h-4" />}
+                label="Generator"
+                isActive={currentView === 'generate'}
+                onClick={() => setCurrentView('generate')}
+              />
+              <Tab
+                icon={<Eye className="w-4 h-4" />}
+                label="Vorschau"
+                isActive={currentView === 'preview'}
+                onClick={() => setCurrentView('preview')}
+              />
+            </div>
+            <button
+              onClick={() => setShowAISettings(true)}
+              className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors duration-200"
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              KI-Einstellungen
+            </button>
+            <button
+              onClick={handleLogout}
+              className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors duration-200"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Abmelden
+            </button>
+          </div>
         </div>
       </div>
 
+      {/* AI Settings Modal */}
+      {showAISettings && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-900">KI-Einstellungen</h2>
+              <button
+                onClick={() => setShowAISettings(false)}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <span className="sr-only">Schließen</span>
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="apiKey" className="block text-sm font-medium text-gray-700 mb-2">
+                  OpenAI API Key
+                </label>
+                <input
+                  type="password"
+                  id="apiKey"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  placeholder="sk-..."
+                />
+                <p className="mt-1 text-sm text-gray-500">
+                  Ihr OpenAI API Key wird sicher im Browser gespeichert
+                </p>
+              </div>
+              
+              <div>
+                <label htmlFor="model" className="block text-sm font-medium text-gray-700 mb-2">
+                  KI-Modell
+                </label>
+                <select
+                  id="model"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                >
+                  <option value="gpt-4o-mini">GPT-4o Mini</option>
+                  <option value="gpt-4o">GPT-4o</option>
+                </select>
+                <p className="mt-1 text-sm text-gray-500">
+                  Wählen Sie das zu verwendende KI-Modell
+                </p>
+              </div>
+            </div>
+            
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setShowAISettings(false)}
+                className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                Speichern & Schließen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {currentView === 'generate' ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div className="space-y-6">
             {/* Linke Spalte: Hauptformular */}
             <div className="bg-white rounded-lg shadow-lg p-6">
@@ -686,6 +805,8 @@ export default function App() {
                 onGenerate={setTree}
                 isGenerating={isGenerating}
                 setIsGenerating={setIsGenerating}
+                apiKey={apiKey}
+                model={model}
               />
             </div>
           </div>
@@ -781,6 +902,99 @@ export default function App() {
             </div>
           </div>
         </div>
+        ) : (
+          <div className="space-y-8">
+            {/* Gespeicherte Themenbäume */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">
+                  <div className="flex items-center">
+                    <span>
+                      Gespeicherte Themenbäume
+                      {isLoadingTrees && (
+                        <Loader2 className="inline-block ml-2 w-4 h-4 animate-spin" />
+                      )}
+                    </span>
+                  </div>
+                </h2>
+                <button
+                  onClick={deleteAllUserData}
+                  disabled={isDeleting || savedTrees.length === 0}
+                  className="px-3 py-1 text-sm text-red-600 hover:text-red-800 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                >
+                  {isDeleting ? (
+                    <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                  ) : (
+                    <Trash2 className="h-4 w-4 mr-2" />
+                  )}
+                  Alles löschen
+                </button>
+              </div>
+              {loadError && (
+                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md text-yellow-800 text-sm">
+                  {loadError}
+                </div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {savedTrees && savedTrees.length > 0 ? (
+                  savedTrees.map((savedTree) => (
+                    <div key={savedTree.id} className="flex flex-col justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-indigo-300 transition-colors">
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-1">{savedTree.title}</h4>
+                        <p className="text-sm text-gray-500 mb-4">
+                          {new Date(savedTree.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="flex justify-end space-x-2">
+                        <button
+                          onClick={() => loadTree(savedTree.id)}
+                          className="px-3 py-1 text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+                        >
+                          Laden
+                        </button>
+                        <button
+                          onClick={() => deleteTree(savedTree.id)}
+                          className="p-1 text-red-600 hover:text-red-800"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="col-span-full text-center py-8 text-gray-500">
+                    Noch keine Themenbäume gespeichert
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Vorschau */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <div className="prose max-w-none">
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                  Themenbaum Vorschau
+                </h2>
+                {tree && !isGenerating ? (
+                  <TreeView 
+                    tree={tree} 
+                    onUpdate={handleTreeUpdate}
+                  />
+                ) : (
+                  <div className="text-gray-500 text-center py-12">
+                    <p>Hier erscheint Ihr ausgewählter Themenbaum</p>
+                    {isGenerating && (
+                      <div className="mt-4">
+                        <Loader2 className="animate-spin h-8 w-8 mx-auto text-indigo-600" />
+                        <p className="mt-2">Generiere Themenbaum...</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

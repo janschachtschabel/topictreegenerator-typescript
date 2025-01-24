@@ -87,8 +87,8 @@ export const EDUCATIONAL_CONTEXT_MAPPING: Record<string, string> = {
 
 export const EDUCATION_SECTOR_MAPPING: Record<string, string> = {
   "Keine Vorgabe": "",
-  "Frühkindlich": "early_childhood",
-  "Allgemeinbildend": "general",
-  "Berufsbildend": "vocational",
-  "Akademisch": "academic"
+  "grundbildend": "early_childhood",
+  "allgemeinbildend": "general",
+  "berufsbildend": "vocational",
+  "akademisch": "academic"
 };
