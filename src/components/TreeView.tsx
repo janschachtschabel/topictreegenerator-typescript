@@ -4,6 +4,7 @@ import { TopicTree, Collection } from '../types/TopicTree';
 import { generateAsciiTree, filterTreeBySector } from '../utils/treeUtils';
 import { EDUCATION_SECTOR_MAPPING } from '../constants/mappings';
 import { createProperties } from '../utils/openai';
+import { supabase } from '../utils/supabase';
 
 interface TreeViewProps {
   tree: TopicTree;
@@ -295,6 +296,7 @@ export default function TreeView({ tree, onUpdate }: TreeViewProps) {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [selectedSector, setSelectedSector] = useState('allgemeinbildend');
+  const [isSaving, setIsSaving] = useState(false);
 
   // Filter tree based on selected sector
   const filteredTree = tree ? filterTreeBySector(tree, selectedSector) : null;
@@ -413,6 +415,23 @@ export default function TreeView({ tree, onUpdate }: TreeViewProps) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const handleTreeUpdate = async (updatedTree: TopicTree) => {
+    setIsSaving(true);
+    try {
+      // Update tree through parent component
+      onUpdate(updatedTree);
+      setHasUnsavedChanges(false);
+
+      // Refresh trees list
+      window.dispatchEvent(new CustomEvent('refreshTrees'));
+    } catch (error) {
+      console.error('Error updating tree:', error);
+      alert('Fehler beim Speichern des Themenbaums. Bitte versuchen Sie es erneut.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -644,7 +663,7 @@ export default function TreeView({ tree, onUpdate }: TreeViewProps) {
       {hasUnsavedChanges && (
         <div className="mt-4 flex justify-end">
           <button
-            onClick={() => setHasUnsavedChanges(false)}
+            onClick={() => void handleTreeUpdate(tree)}
             className="flex items-center px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
           >
             <Save className="w-4 h-4 mr-2" />

@@ -420,6 +420,7 @@ export default function App() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [currentView, setCurrentView] = useState<View>('generate');
+  const [currentTreeId, setCurrentTreeId] = useState<string | null>(null);
   const [savedTrees, setSavedTrees] = useState<Array<{
     id: string;
     title: string;
@@ -587,6 +588,9 @@ export default function App() {
 
   const loadTree = async (id: string) => {
     try {
+      setCurrentTreeId(id);
+      setCurrentView('preview');
+      
       const { data: tree, error } = await supabase
         .from('topic_trees')
         .select('tree_data')
@@ -623,6 +627,7 @@ export default function App() {
   const deleteTree = async (id: string) => {
     if (!confirm('Möchten Sie diesen Themenbaum wirklich löschen?')) return;
 
+    const isCurrentTree = id === currentTreeId;
     try {
       const { error } = await supabase
         .from('topic_trees')
@@ -718,23 +723,35 @@ export default function App() {
     setIsSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+      if (!user) throw new Error('Nicht angemeldet');
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('topic_trees')
-        .update({
+        .upsert({
           tree_data: updatedTree,
-          title: updatedTree.metadata.title
+          title: updatedTree.metadata.title,
+          user_id: user.id
+        }, {
+          onConflict: 'user_id,title',
+          ignoreDuplicates: false
         })
-        .eq('user_id', user.id)
-        .eq('title', updatedTree.metadata.title);
+        .select('id')
+        .single();
 
       if (error) throw error;
-      
-      setTree(updatedTree);
+
+      if (data) {
+        setCurrentTreeId(data.id);
+        setTree(updatedTree);
+        void loadSavedTrees();
+      }
+
+      return data?.id;
+
     } catch (error) {
       console.error('Error updating tree:', error);
       alert('Fehler beim Speichern des Themenbaums');
+      throw error;
     } finally {
       setIsSaving(false);
     }
@@ -903,7 +920,9 @@ export default function App() {
                     {savedTrees.map((savedTree) => (
                       <div key={savedTree.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div>
-                          <h4 className="font-medium text-gray-900">{savedTree.title}</h4>
+                          <h4 className={`font-medium ${savedTree.id === currentTreeId ? 'text-indigo-600' : 'text-gray-900'}`}>
+                            {savedTree.title}
+                          </h4>
                           <p className="text-sm text-gray-500">
                             {new Date(savedTree.created_at).toLocaleDateString()}
                           </p>
@@ -995,7 +1014,7 @@ export default function App() {
                 {savedTrees && savedTrees.length > 0 ? (
                   savedTrees.map((savedTree) => (
                     <div key={savedTree.id} className="flex flex-col justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-indigo-300 transition-colors">
-                      <div>
+                      <div className={savedTree.id === currentTreeId ? 'border-l-4 border-indigo-500 pl-2' : ''}>
                         <h4 className="font-medium text-gray-900 mb-1">{savedTree.title}</h4>
                         <p className="text-sm text-gray-500 mb-4">
                           {new Date(savedTree.created_at).toLocaleDateString()}

@@ -107,21 +107,94 @@ export const generateStructuredText = async (
 
     const makeRequest = async (retries = 3): Promise<any> => {
       try {
-        const completion = await openai.chat.completions.create({
-          model: apiModel,
-          messages: [
-            { role: 'system', content: BASE_INSTRUCTIONS },
-            { role: 'user', content: truncatedPrompt }
-          ],
-          max_tokens: 12000,
-          temperature: 0.7
-        });
+        let completion;
+        let parseAttempt = 0;
+        const maxParseAttempts = 3;
 
-        if (!completion.choices[0]?.message?.content) {
-          throw new OpenAIError('Keine gültige Antwort von der OpenAI API erhalten');
+        while (parseAttempt < maxParseAttempts) {
+          if (parseAttempt > 0) {
+            console.log(`Parsing-Fehler aufgetreten. Wiederhole Anfrage (Versuch ${parseAttempt + 1} von ${maxParseAttempts})...`);
+            // Update status in TopicForm
+            window.dispatchEvent(new CustomEvent('generationStatus', { 
+              detail: `Parsing-Fehler aufgetreten. Wiederhole Anfrage (Versuch ${parseAttempt + 1} von ${maxParseAttempts})...`
+            }));
+          }
+
+          completion = await openai.chat.completions.create({
+            model: apiModel,
+            messages: [
+              { role: 'system', content: BASE_INSTRUCTIONS },
+              { role: 'user', content: truncatedPrompt }
+            ],
+            max_tokens: 12000,
+            temperature: 0.7 + (parseAttempt * 0.1) // Slightly increase temperature on retries
+          });
+
+          if (!completion.choices[0]?.message?.content) {
+            throw new OpenAIError('Keine gültige Antwort von der OpenAI API erhalten');
+          }
+
+          const content = completion.choices[0].message.content.trim();
+          console.log(`Rohantwort von OpenAI (Versuch ${parseAttempt + 1}):`, content);
+
+          try {
+            // Clean and parse the response
+            const cleanedContent = content
+              .replace(/```json\n?|\n?```/g, '')
+              .replace(/[\u201C\u201D]/g, '"')
+              .replace(/^\s*\[|\]\s*$/g, '')
+              .trim();
+
+            const wrappedContent = cleanedContent.startsWith('[') ? cleanedContent : `[${cleanedContent}]`;
+            const parsed = JSON.parse(wrappedContent);
+
+            // Validate structure
+            const validTopics = parsed.filter((item: any) => 
+              item &&
+              typeof item === 'object' &&
+              typeof item.title === 'string' &&
+              typeof item.shorttitle === 'string' &&
+              (item.alternative_titles === undefined || (
+                typeof item.alternative_titles === 'object' &&
+                Object.entries(item.alternative_titles).every(
+                  ([key, value]) => 
+                    ['grundbildend', 'allgemeinbildend', 'berufsbildend', 'akademisch'].includes(key) &&
+                    typeof value === 'string'
+                )
+              )) &&
+              typeof item.description === 'string' &&
+              Array.isArray(item.keywords)
+            );
+
+            if (validTopics.length === 0) {
+              throw new Error('Keine gültigen Themen in der Antwort');
+            }
+
+            // Return validated topics with default alternative titles if needed
+            return validTopics.map(topic => ({
+              ...topic,
+              alternative_titles: topic.alternative_titles || {
+                grundbildend: topic.title,
+                allgemeinbildend: topic.title,
+                berufsbildend: topic.title,
+                akademisch: topic.title
+              }
+            }));
+          } catch (parseError) {
+            console.error(`Parsing-Fehler bei Versuch ${parseAttempt + 1}:`, parseError);
+            parseAttempt++;
+            
+            if (parseAttempt >= maxParseAttempts) {
+              throw new Error('Konnte keine gültige JSON-Struktur erzeugen nach mehreren Versuchen');
+            }
+            
+            // Wait before retry with exponential backoff
+            await new Promise(resolve => setTimeout(resolve, 1000 * parseAttempt));
+            continue;
+          }
         }
-
-        return completion;
+        
+        throw new Error('Maximale Anzahl an Parse-Versuchen erreicht');
       } catch (error) {
         if (retries > 0) {
           console.log(`Request failed, retrying... (${retries} attempts left)`);
@@ -133,79 +206,7 @@ export const generateStructuredText = async (
     };
 
     try {
-      const completion = await makeRequest();
-      
-      const content = completion.choices[0].message.content.trim();
-      console.log('Rohantwort von OpenAI:', content);
-    
-      // Bereinige die Antwort von Markdown und Formatierung
-      const cleanedContent = content
-        .replace(/```json\n?|\n?```/g, '')  // Entferne Markdown Code-Blocks
-        .replace(/[\u201C\u201D]/g, '"')    // Ersetze typografische Anführungszeichen
-        .replace(/^\s*\[|\]\s*$/g, '')      // Entferne äußere Klammern falls vorhanden
-        .trim();
-
-      // Stelle sicher, dass wir ein Array haben
-      const wrappedContent = cleanedContent.startsWith('[') ? cleanedContent : `[${cleanedContent}]`;
-
-      try {
-        // Parse and validate the JSON
-        const parsed = JSON.parse(wrappedContent);
-
-        // Validiere die Struktur
-        const validTopics = parsed.filter((item: any) => 
-          item &&
-          typeof item === 'object' &&
-          typeof item.title === 'string' &&
-          typeof item.shorttitle === 'string' &&
-          (item.alternative_titles === undefined || (
-            typeof item.alternative_titles === 'object' &&
-            Object.entries(item.alternative_titles).every(
-              ([key, value]) => 
-                ['grundbildend', 'allgemeinbildend', 'berufsbildend', 'akademisch'].includes(key) &&
-                typeof value === 'string'
-            )
-          )) &&
-          typeof item.description === 'string' &&
-          Array.isArray(item.keywords)
-        );
-
-        if (validTopics.length === 0) {
-          throw new OpenAIError('Die API-Antwort enthält keine gültigen Themen');
-        }
-
-        // Ensure all topics have alternative_titles
-        return validTopics.map(topic => ({
-          ...topic,
-          alternative_titles: topic.alternative_titles || {
-            grundbildend: topic.title,
-            allgemeinbildend: topic.title,
-            berufsbildend: topic.title,
-            akademisch: topic.title
-          }
-        }));
-
-        return validTopics;        
-      } catch (parseError) {
-        console.error('Parsing error:', parseError);
-        console.log('Raw content:', content);
-
-        // Versuche alternative Parsing-Strategien
-        const jsonMatch = content.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          try {            
-            const extracted = jsonMatch[0];
-            const parsed = JSON.parse(extracted);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              return parsed;
-            }
-          } catch (e) {
-            console.error('Alternative parsing failed:', e);
-          }          
-        }
-        
-        throw new OpenAIError('Die API-Antwort konnte nicht als gültiges JSON interpretiert werden');        
-      }
+      return await makeRequest();
     } catch (error) {
       if (error instanceof OpenAI.APIError) {
         const message = error.status === 401 

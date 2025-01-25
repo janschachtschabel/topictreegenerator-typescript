@@ -22,11 +22,11 @@ export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, a
   const [author, setAuthor] = useState('');
   const [targetAudience, setTargetAudience] = useState('Lehrkräfte und Bildungseinrichtungen');
   const [discipline, setDiscipline] = useState('Physik');
-  const [context, setContext] = useState('Sekundarstufe II');
-  const [sector, setSector] = useState('allgemeinbildend');
-  const [numMain, setNumMain] = useState(10); // Default: 10
-  const [numSub, setNumSub] = useState(4);    // Default: 4
-  const [numLehrplan, setNumLehrplan] = useState(2); // Default: 2
+  const [context, setContext] = useState('Keine Vorgabe');
+  const [sector, setSector] = useState('Keine Vorgabe');
+  const [numMain, setNumMain] = useState(10);
+  const [numSub, setNumSub] = useState(4);
+  const [numLehrplan, setNumLehrplan] = useState(2);
   const [includeAllgemeines, setIncludeAllgemeines] = useState<false | true | 'ai'>(false);
   const [includeMethodik, setIncludeMethodik] = useState<false | true | 'ai'>(false);
   const [status, setStatus] = useState<string>('');
@@ -39,283 +39,168 @@ export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, a
   const [documentIds, setDocumentIds] = useState<string[]>([]);
   const [showSettings, setShowSettings] = useState(false);
 
-  const saveTree = async (tree: TopicTree) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { data, error } = await supabase
-      .from('topic_trees')
-      .insert({
-        title: tree.metadata.title,
-        tree_data: tree,
-        user_id: user.id,
-        document_ids: documentIds
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Fehler beim Speichern des Themenbaums:', error);
-      alert('Fehler beim Speichern des Themenbaums');
-      return;
-    }
-
-    // Benachrichtige die übergeordnete Komponente über die Änderung
-    onGenerate(tree);
-  };
-
-  const resetCurrentTree = () => {
-    onGenerate(null);
-    setDocumentIds([]);
-    setDocumentContexts([]);
-  };
-
-  const analyzeDocuments = async (apiKey: string, model: string) => {
-    setStatus('Analysiere Dokumente...');
-    const results = [];
-    
-    for (const context of documentContexts) {
-      const prompt = DOCUMENT_ANALYSIS_PROMPT.replace('{document_content}', chunkDocumentContext(context));
-      const result = await generateStructuredText(apiKey, prompt, model);
-      results.push(result);
-    }
-    
-    // Group categories by sector
-    const sectorCategories: Record<string, string[]> = {
-      grundbildend: [],
-      allgemeinbildend: [],
-      berufsbildend: [],
-      akademisch: []
+  // Add event listener for generation status updates
+  useEffect(() => {
+    const handleGenerationStatus = (event: CustomEvent) => {
+      setStatus(event.detail);
     };
+
+    window.addEventListener('generationStatus', handleGenerationStatus as EventListener);
     
-    results.forEach(result => {
-      if (result.primary_sector && result.main_categories) {
-        sectorCategories[result.primary_sector].push(...result.main_categories);
-      }
-    });
-    
-    // Generate summaries for each sector
-    const sectorSummaries: Record<string, string[]> = {};
-    
-    for (const [sector, categories] of Object.entries(sectorCategories)) {
-      if (categories.length > 0) {
-        const prompt = SECTOR_SUMMARY_PROMPT
-          .replace('{sector}', sector)
-          .replace('{category_lists}', categories.join('\n'))
-          .replace('{num_main}', Math.min(categories.length, numMain).toString());
-        
-        const summary = await generateStructuredText(apiKey, prompt, model);
-        sectorSummaries[sector] = summary;
-      }
+    return () => {
+      window.removeEventListener('generationStatus', handleGenerationStatus as EventListener);
+    };
+  }, []);
+
+  const saveTree = async (tree: TopicTree) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Nicht angemeldet');
+
+      const { error } = await supabase
+        .from('topic_trees')
+        .upsert({
+          tree_data: tree,
+          title: tree.metadata.title,
+          user_id: user.id,
+          document_ids: documentIds
+        });
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error saving tree:', error);
+      throw new Error('Fehler beim Speichern des Themenbaums');
     }
-    
-    return sectorSummaries;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // For manual generation, create a simple tree with one main category
-    if (knowledgeSource === 'manual') {
-      const tree: TopicTree = {
-        collection: [{
-          title: "Hauptkategorie 1",
-          shorttitle: "HK1",
-          properties: createProperties(
-            "Hauptkategorie 1",
-            "HK1",
-            {
-              grundbildend: "Hauptkategorie 1",
-              allgemeinbildend: "Hauptkategorie 1",
-              berufsbildend: "Hauptkategorie 1",
-              akademisch: "Hauptkategorie 1"
-            },
-            "Erste Hauptkategorie des Themenbaums",
-            ["hauptkategorie", "themenbaum"],
-            DISCIPLINE_MAPPING[discipline],
-            EDUCATIONAL_CONTEXT_MAPPING[context]
-          ),
-          subcollections: []
-        }],
-        metadata: {
-          title: title,
-          theme: topic,
-          generation_settings: {
-            num_main: 1,
-            num_sub: 0,
-            num_lehrplan: 0,
-            discipline: discipline,
-            educational_context: context,
-            education_sector: sector,
-            allgemeines_option: false,
-            methodik_option: false
-          },
-          description: `Manuell erstellter Themenbaum für ${topic}`,
-          target_audience: targetAudience,
-          created_at: new Date().toISOString(),
-          version: "1.0",
-          author: author
-        }
-      };
-      
-      await saveTree(tree);
-      onGenerate(tree);
+    if (!title || !author) {
+      alert('Bitte füllen Sie Titel und Autor aus.');
       return;
     }
-    
-    setStatus('');
-    setCurrentPrompt(0);
-
-    if (!apiKey.trim()) {
-      alert('Bitte geben Sie einen OpenAI API Key in den Einstellungen ein');
-      return;
-    }
-    
-    // Berechne die Gesamtanzahl der notwendigen Prompts
-    const promptsForMain = 1; // Ein Prompt für alle Oberkategorien
-    const promptsForSub = numMain; // Ein Prompt pro Oberkategorie für Unterkategorien
-    const promptsForLehrplan = numMain * numSub; // Ein Prompt pro Unterkategorie für weitere Unterkategorien
-    const totalPrompts = promptsForMain + promptsForSub + promptsForLehrplan;
-    setTotalPrompts(totalPrompts);
-    setCurrentPrompt(0);
-    
-    const updateProgress = () => {
-      setCurrentPrompt(prev => {
-        const next = prev + 1;
-        return next;
-      });
-    };
     
     setIsGenerating(true);
-    setStatus('Verbinde mit OpenAI API...');
-    
+    setCurrentPrompt(0);
+    setTotalPrompts(0);
+    setStatus('Initialisiere...');
+
     try {
-      const disciplineInfo = discipline !== "Keine Vorgabe" ? ` im Fach ${discipline}` : '';
-      const contextInfo = context !== "Keine Vorgabe" ? ` für die ${context}` : '';
-      const sectorInfo = sector !== "Keine Vorgabe" ? ` im ${sector.toLowerCase()}en Bildungssektor` : '';
-
-      // Validate API key format before making request
-      if (!apiKey.trim() || !apiKey.startsWith('sk-')) {
-        throw new Error('Bitte geben Sie einen gültigen OpenAI API Key ein. Der Key muss mit "sk-" beginnen.');
-      }
-      console.log('Starte Generierung mit Parametern:', {
-        topic,
-        discipline,
-        context,
-        sector,
-        model,
-        numMain
-      });
-
-      // For documents-sorted mode, analyze documents first
-      let sectorSummaries = {};
-      if (knowledgeSource === 'documents-sorted') {
-        sectorSummaries = await analyzeDocuments(apiKey, model);
-        setStatus('Dokumente analysiert, generiere Themenbaum...');
-      }
-
-      const mainPrompt = MAIN_PROMPT_TEMPLATE
-        .replace('{num_main}', numMain.toString())
-        .replace('{themenbaumthema}', topic)
-        .replace('{include_allgemeines}', includeAllgemeines === 'ai' ? 'Beginne mit einer Hauptkategorie "Allgemeines".' : '')
-        .replace('{include_methodik}', includeMethodik === 'ai' ? 'Füge eine Hauptkategorie "Methodik und Didaktik" hinzu.' : '')
-        .replace('{discipline_info}', knowledgeSource !== 'documents' ? disciplineInfo : '')
-        .replace('{context_info}', knowledgeSource !== 'documents' ? contextInfo : '')
-        .replace('{sector_info}', knowledgeSource !== 'documents' ? sectorInfo : '')
-        + (documentContexts.length > 0 && (knowledgeSource === 'documents' || knowledgeSource === 'documents-sorted')
-           ? `\n\nBerücksichtige bei der Generierung ${knowledgeSource === 'documents' ? 'ausschließlich' : 'zusätzlich'} folgende Kontexte aus den hochgeladenen Dokumenten:\n${
-               documentContexts
-                 .map(context => chunkDocumentContext(context))
-                 .join('\n---\n')
-             }`
-           : '')
-        + (knowledgeSource === 'documents' 
-           ? '\n\nWICHTIG: Generiere die Themen AUSSCHLIESSLICH basierend auf den bereitgestellten Dokumenten!'
-           : knowledgeSource === 'documents-sorted'
-           ? `\n\nWICHTIG: Berücksichtige bei der Generierung die folgenden voranalysierten Hauptkategorien je Bildungssektor:\n${
-               Object.entries(sectorSummaries)
-                 .map(([sector, categories]) => `${sector}:\n${categories.join('\n')}`)
-                 .join('\n\n')
-             }`
-           : '');
-
-      setStatus('Generiere Hauptthemen...');
-      console.log('Sende Hauptthemen-Prompt:', mainPrompt);
-      const topics = await generateStructuredText(apiKey, mainPrompt, model);
-      updateProgress(); // Updates currentPrompt
-
-      // Create a list of all main topics for context
-      const mainTopicsList = topics.map(t => t.title).join('\n- ');
-
-      // Handle special categories
-      let finalTopics = [...topics];
-      
-      // If AI-generated categories are present but not requested, remove them
-      if (includeAllgemeines !== 'ai') {
-        finalTopics = finalTopics.filter(t => t.title !== "Allgemeines");
-      }
-      if (includeMethodik !== 'ai') {
-        finalTopics = finalTopics.filter(t => t.title !== "Methodik und Didaktik");
-      }
-
-      // Create main collections
-      const collections = await Promise.all(finalTopics.map(async topic => {
-        setStatus(`Generiere ${numSub} Unterkategorien für "${topic.title}"...`);
-        
-        // Generate subtopics for regular main topics
-        const subPrompt = SUB_PROMPT_TEMPLATE
-          .replace('{num_sub}', numSub.toString())
-          .replace('{main_theme}', topic.title)
-          .replace('{existing_main_topics}', mainTopicsList)
-          .replace('{themenbaumthema}', topic)
-          .replace('{discipline_info}', disciplineInfo)
-          .replace('{context_info}', contextInfo)
-          .replace('{sector_info}', sectorInfo);
-
-        const subtopics = await generateStructuredText(apiKey, subPrompt, model);
-        updateProgress(); // Updates currentPrompt
-        
-        // Create a list of all existing topics for context
-        const existingTopics = topics.map(t => ({
-          title: t.title,
-          subtopics: t === topic ? subtopics.map(st => st.title) : []
-        }));
-
-        // Generate curriculum topics for each subtopic
-        const subcollections = await Promise.all(subtopics.map(async subtopic => {
-          setStatus(`Generiere ${numLehrplan} weitere Unterkategorien für "${subtopic.title}"...`);
-          
-          // Format existing topics for the prompt
-          const existingTopicsText = existingTopics
-            .map(t => `${t.title}${t.subtopics.length ? '\n  ' + t.subtopics.join('\n  ') : ''}`)
-            .join('\n');
-
-          const lpPrompt = LP_PROMPT_TEMPLATE
-            .replace('{num_lp}', numLehrplan.toString())
-            .replace('{main_theme}', topic.title)
-            .replace('{existing_topics}', existingTopicsText)
-            .replace('{sub_theme}', subtopic.title)
-            .replace('{themenbaumthema}', topic)
-            .replace('{discipline_info}', disciplineInfo)
-            .replace('{context_info}', contextInfo)
-            .replace('{sector_info}', sectorInfo);
-
-          const lehrplanTopics = await generateStructuredText(apiKey, lpPrompt, model);
-          updateProgress(); // Updates currentPrompt
-          
-          return {
-            title: subtopic.title,
-            shorttitle: subtopic.shorttitle,
+      // For manual generation, create a simple tree
+      if (knowledgeSource === 'manual') {
+        const tree: TopicTree = {
+          collection: [{
+            title: "Hauptkategorie 1",
+            shorttitle: "HK1",
             properties: createProperties(
-              subtopic.title,
-              subtopic.shorttitle,
-              subtopic.alternative_titles,
-              subtopic.description,
-              subtopic.keywords,
+              "Hauptkategorie 1",
+              "HK1",
+              {
+                grundbildend: "Hauptkategorie 1",
+                allgemeinbildend: "Hauptkategorie 1",
+                berufsbildend: "Hauptkategorie 1",
+                akademisch: "Hauptkategorie 1"
+              },
+              "Erste Hauptkategorie des Themenbaums",
+              ["hauptkategorie", "themenbaum"],
               DISCIPLINE_MAPPING[discipline],
               EDUCATIONAL_CONTEXT_MAPPING[context]
             ),
-            subcollections: lehrplanTopics.map(lp => ({
+            subcollections: []
+          }],
+          metadata: {
+            title: title || topic,
+            theme: topic,
+            generation_settings: {
+              num_main: 1,
+              num_sub: 0,
+              num_lehrplan: 0,
+              discipline: discipline,
+              educational_context: context,
+              education_sector: sector,
+              allgemeines_option: false,
+              methodik_option: false
+            },
+            description: `Manuell erstellter Themenbaum für ${topic}`,
+            target_audience: targetAudience,
+            created_at: new Date().toISOString(),
+            version: "1.0",
+            author: author
+          }
+        };
+        
+        await saveTree(tree);
+        onGenerate(tree);
+        return;
+      }
+
+      // Calculate total number of prompts
+      const promptsForMain = 1;
+      const promptsForSub = numMain;
+      const promptsForLehrplan = numMain * numSub;
+      const totalPrompts = promptsForMain + promptsForSub + promptsForLehrplan;
+      setTotalPrompts(totalPrompts);
+
+      // Generate main topics
+      setStatus('Generiere Hauptthemen...');
+      const mainPrompt = MAIN_PROMPT_TEMPLATE
+        .replace('{num_main}', numMain.toString())
+        .replace('{themenbaumthema}', topic)
+        .replace('{discipline_info}', discipline !== "Keine Vorgabe" ? ` im Fach ${discipline}` : '')
+        .replace('{context_info}', context !== "Keine Vorgabe" ? ` für die ${context}` : '')
+        .replace('{sector_info}', sector !== "Keine Vorgabe" ? ` im ${sector.toLowerCase()}en Bildungssektor` : '')
+        .replace('{include_allgemeines}', includeAllgemeines === 'ai' ? 'Beginne mit einer Hauptkategorie "Allgemeines".' : '')
+        .replace('{include_methodik}', includeMethodik === 'ai' ? 'Füge eine Hauptkategorie "Methodik und Didaktik" hinzu.' : '');
+
+      const mainTopics = await generateStructuredText(apiKey, mainPrompt, model);
+      setCurrentPrompt(prev => prev + 1);
+
+      // Generate subtopics for each main topic
+      const collection = await Promise.all(mainTopics.map(async (mainTopic) => {
+        setStatus(`Generiere Unterthemen für "${mainTopic.title}"...`);
+        
+        const subPrompt = SUB_PROMPT_TEMPLATE
+          .replace('{num_sub}', numSub.toString())
+          .replace('{main_theme}', mainTopic.title)
+          .replace('{existing_main_topics}', mainTopics.map(t => t.title).join('\n'))
+          .replace('{themenbaumthema}', topic)
+          .replace('{discipline_info}', discipline !== "Keine Vorgabe" ? ` im Fach ${discipline}` : '')
+          .replace('{context_info}', context !== "Keine Vorgabe" ? ` für die ${context}` : '')
+          .replace('{sector_info}', sector !== "Keine Vorgabe" ? ` im ${sector.toLowerCase()}en Bildungssektor` : '');
+
+        const subTopics = await generateStructuredText(apiKey, subPrompt, model);
+        setCurrentPrompt(prev => prev + 1);
+
+        // Generate curriculum topics for each subtopic
+        const subcollections = await Promise.all(subTopics.map(async (subTopic) => {
+          setStatus(`Generiere Lehrplanthemen für "${subTopic.title}"...`);
+          
+          const lpPrompt = LP_PROMPT_TEMPLATE
+            .replace('{num_lp}', numLehrplan.toString())
+            .replace('{main_theme}', mainTopic.title)
+            .replace('{sub_theme}', subTopic.title)
+            .replace('{themenbaumthema}', topic)
+            .replace('{discipline_info}', discipline !== "Keine Vorgabe" ? ` im Fach ${discipline}` : '')
+            .replace('{context_info}', context !== "Keine Vorgabe" ? ` für die ${context}` : '')
+            .replace('{sector_info}', sector !== "Keine Vorgabe" ? ` im ${sector.toLowerCase()}en Bildungssektor` : '');
+
+          const lpTopics = await generateStructuredText(apiKey, lpPrompt, model);
+          setCurrentPrompt(prev => prev + 1);
+
+          return {
+            title: subTopic.title,
+            shorttitle: subTopic.shorttitle,
+            properties: createProperties(
+              subTopic.title,
+              subTopic.shorttitle,
+              subTopic.alternative_titles,
+              subTopic.description,
+              subTopic.keywords,
+              DISCIPLINE_MAPPING[discipline],
+              EDUCATIONAL_CONTEXT_MAPPING[context]
+            ),
+            subcollections: lpTopics.map(lp => ({
               title: lp.title,
               shorttitle: lp.shorttitle,
               properties: createProperties(
@@ -333,14 +218,14 @@ export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, a
         }));
 
         return {
-          title: topic.title,
-          shorttitle: topic.shorttitle,
+          title: mainTopic.title,
+          shorttitle: mainTopic.shorttitle,
           properties: createProperties(
-            topic.title,
-            topic.shorttitle,
-            topic.alternative_titles,
-            topic.description,
-            topic.keywords,
+            mainTopic.title,
+            mainTopic.shorttitle,
+            mainTopic.alternative_titles,
+            mainTopic.description,
+            mainTopic.keywords,
             DISCIPLINE_MAPPING[discipline],
             EDUCATIONAL_CONTEXT_MAPPING[context]
           ),
@@ -348,58 +233,9 @@ export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, a
         };
       }));
 
-      // Create optional main topics
-      const optionalCollections = [];
-      
-      if (includeAllgemeines) {
-        optionalCollections.push({
-          title: "Allgemeines",
-          shorttitle: "Allg",
-          properties: createProperties(
-            "Allgemeines",
-            "Allg",
-            {
-              grundbildend: "Allgemeines",
-              allgemeinbildend: "Allgemeines",
-              berufsbildend: "Allgemeines",
-              akademisch: "Allgemeines"
-            },
-            "Allgemeine Informationen und übergreifende Themen",
-            ["Allgemein", "Übergreifend"],
-            DISCIPLINE_MAPPING[discipline],
-            EDUCATIONAL_CONTEXT_MAPPING[context]
-          ),
-          subcollections: []
-        });
-      }
-
-      if (includeMethodik) {
-        optionalCollections.push({
-          title: "Methodik und Didaktik",
-          shorttitle: "Methodik",
-          properties: createProperties(
-            "Methodik und Didaktik",
-            "Methodik",
-            {
-              grundbildend: "Methodik und Didaktik",
-              allgemeinbildend: "Methodik und Didaktik",
-              berufsbildend: "Methodik und Didaktik",
-              akademisch: "Methodik und Didaktik"
-            },
-            "Pädagogische Methoden und didaktische Ansätze",
-            ["Methodik", "Didaktik", "Lehrmethoden"],
-            DISCIPLINE_MAPPING[discipline],
-            EDUCATIONAL_CONTEXT_MAPPING[context]
-          ),
-          subcollections: []
-        });
-      }
-
-      // Combine collections
-      const finalCollections = [...collections, ...optionalCollections];
-
+      // Create the final tree
       const tree: TopicTree = {
-        collection: finalCollections,
+        collection,
         metadata: {
           title: title || topic,
           theme: topic,
@@ -423,12 +259,13 @@ export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, a
 
       await saveTree(tree);
       setStatus('Themenbaum erfolgreich generiert!');
-      setIsGenerating(false);
+      onGenerate(tree);
     } catch (error) {
-      console.error('Fehler bei der Generierung:', error);
-      setStatus(`Fehler: ${error.message}`);
+      console.error('Error generating tree:', error);
+      setStatus(`Fehler: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`);
+      alert('Fehler bei der Generierung des Themenbaums. Bitte versuchen Sie es erneut.');
+    } finally {
       setIsGenerating(false);
-      alert(error.message);
     }
   };
 
