@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { DISCIPLINE_MAPPING, EDUCATIONAL_CONTEXT_MAPPING, EDUCATION_SECTOR_MAPPING } from '../constants/mappings';
 import { TopicTree } from '../types/TopicTree';
 import { generateStructuredText, createProperties, chunkDocumentContext } from '../utils/openai';
@@ -14,9 +14,11 @@ interface TopicFormProps {
   setIsGenerating: (generating: boolean) => void;
   apiKey: string;
   model: string;
+  provider: any;
+  baseUrl: string;
 }
 
-export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, apiKey, model }: TopicFormProps) {
+export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, apiKey, model, provider, baseUrl }: TopicFormProps) {
   const [topic, setTopic] = useState('Physik');
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
@@ -39,7 +41,6 @@ export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, a
   const [documentIds, setDocumentIds] = useState<string[]>([]);
   const [showSettings, setShowSettings] = useState(false);
 
-  // Add event listener for generation status updates
   useEffect(() => {
     const handleGenerationStatus = (event: CustomEvent) => {
       setStatus(event.detail);
@@ -87,7 +88,6 @@ export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, a
     setStatus('Initialisiere...');
 
     try {
-      // For manual generation, create a simple tree
       if (knowledgeSource === 'manual') {
         const tree: TopicTree = {
           collection: [{
@@ -137,10 +137,20 @@ export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, a
 
       // Calculate total number of prompts
       const promptsForMain = 1;
-      const promptsForSub = numMain;
-      const promptsForLehrplan = numMain * numSub;
+      const promptsForSub = numMain * (numSub > 0 ? 1 : 0);
+      const promptsForLehrplan = numMain * numSub * (numLehrplan > 0 ? 1 : 0);
       const totalPrompts = promptsForMain + promptsForSub + promptsForLehrplan;
       setTotalPrompts(totalPrompts);
+
+      // Process document context if using documents
+      let documentContext = '';
+      if (knowledgeSource === 'documents' || knowledgeSource === 'documents-sorted') {
+        documentContext = documentContexts.join('\n\n');
+        if (!documentContext) {
+          throw new Error('Keine Dokumente zum Verarbeiten gefunden');
+        }
+        documentContext = chunkDocumentContext(documentContext);
+      }
 
       // Generate main topics
       setStatus('Generiere Hauptthemen...');
@@ -151,71 +161,84 @@ export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, a
         .replace('{context_info}', context !== "Keine Vorgabe" ? ` für die ${context}` : '')
         .replace('{sector_info}', sector !== "Keine Vorgabe" ? ` im ${sector.toLowerCase()}en Bildungssektor` : '')
         .replace('{include_allgemeines}', includeAllgemeines === 'ai' ? 'Beginne mit einer Hauptkategorie "Allgemeines".' : '')
-        .replace('{include_methodik}', includeMethodik === 'ai' ? 'Füge eine Hauptkategorie "Methodik und Didaktik" hinzu.' : '');
+        .replace('{include_methodik}', includeMethodik === 'ai' ? 'Füge eine Hauptkategorie "Methodik und Didaktik" am Ende hinzu.' : '')
+        + (documentContext ? `\n\nBerücksichtige folgenden Kontext:\n${documentContext}` : '');
 
-      const mainTopics = await generateStructuredText(apiKey, mainPrompt, model);
+      const mainTopics = await generateStructuredText(apiKey, mainPrompt, model, baseUrl);
       setCurrentPrompt(prev => prev + 1);
 
-      // Generate subtopics for each main topic
+      // Process each main topic
       const collection = await Promise.all(mainTopics.map(async (mainTopic) => {
-        setStatus(`Generiere Unterthemen für "${mainTopic.title}"...`);
+        let subcollections = [];
         
-        const subPrompt = SUB_PROMPT_TEMPLATE
-          .replace('{num_sub}', numSub.toString())
-          .replace('{main_theme}', mainTopic.title)
-          .replace('{existing_main_topics}', mainTopics.map(t => t.title).join('\n'))
-          .replace('{themenbaumthema}', topic)
-          .replace('{discipline_info}', discipline !== "Keine Vorgabe" ? ` im Fach ${discipline}` : '')
-          .replace('{context_info}', context !== "Keine Vorgabe" ? ` für die ${context}` : '')
-          .replace('{sector_info}', sector !== "Keine Vorgabe" ? ` im ${sector.toLowerCase()}en Bildungssektor` : '');
-
-        const subTopics = await generateStructuredText(apiKey, subPrompt, model);
-        setCurrentPrompt(prev => prev + 1);
-
-        // Generate curriculum topics for each subtopic
-        const subcollections = await Promise.all(subTopics.map(async (subTopic) => {
-          setStatus(`Generiere Lehrplanthemen für "${subTopic.title}"...`);
+        if (numSub > 0) {
+          setStatus(`Generiere Unterthemen für "${mainTopic.title}"...`);
           
-          const lpPrompt = LP_PROMPT_TEMPLATE
-            .replace('{num_lp}', numLehrplan.toString())
+          const subPrompt = SUB_PROMPT_TEMPLATE
+            .replace('{num_sub}', numSub.toString())
             .replace('{main_theme}', mainTopic.title)
-            .replace('{sub_theme}', subTopic.title)
+            .replace('{existing_main_topics}', mainTopics.map(t => t.title).join('\n'))
             .replace('{themenbaumthema}', topic)
             .replace('{discipline_info}', discipline !== "Keine Vorgabe" ? ` im Fach ${discipline}` : '')
             .replace('{context_info}', context !== "Keine Vorgabe" ? ` für die ${context}` : '')
-            .replace('{sector_info}', sector !== "Keine Vorgabe" ? ` im ${sector.toLowerCase()}en Bildungssektor` : '');
+            .replace('{sector_info}', sector !== "Keine Vorgabe" ? ` im ${sector.toLowerCase()}en Bildungssektor` : '')
+            + (documentContext ? `\n\nBerücksichtige folgenden Kontext:\n${documentContext}` : '');
 
-          const lpTopics = await generateStructuredText(apiKey, lpPrompt, model);
+          const subTopics = await generateStructuredText(apiKey, subPrompt, model, baseUrl);
           setCurrentPrompt(prev => prev + 1);
 
-          return {
-            title: subTopic.title,
-            shorttitle: subTopic.shorttitle,
-            properties: createProperties(
-              subTopic.title,
-              subTopic.shorttitle,
-              subTopic.alternative_titles,
-              subTopic.description,
-              subTopic.keywords,
-              DISCIPLINE_MAPPING[discipline],
-              EDUCATIONAL_CONTEXT_MAPPING[context]
-            ),
-            subcollections: lpTopics.map(lp => ({
-              title: lp.title,
-              shorttitle: lp.shorttitle,
+          // Process each subtopic
+          subcollections = await Promise.all(subTopics.map(async (subTopic) => {
+            let lpSubcollections = [];
+            
+            if (numLehrplan > 0) {
+              setStatus(`Generiere Lehrplanthemen für "${subTopic.title}"...`);
+              
+              const lpPrompt = LP_PROMPT_TEMPLATE
+                .replace('{num_lp}', numLehrplan.toString())
+                .replace('{main_theme}', mainTopic.title)
+                .replace('{sub_theme}', subTopic.title)
+                .replace('{themenbaumthema}', topic)
+                .replace('{discipline_info}', discipline !== "Keine Vorgabe" ? ` im Fach ${discipline}` : '')
+                .replace('{context_info}', context !== "Keine Vorgabe" ? ` für die ${context}` : '')
+                .replace('{sector_info}', sector !== "Keine Vorgabe" ? ` im ${sector.toLowerCase()}en Bildungssektor` : '')
+                + (documentContext ? `\n\nBerücksichtige folgenden Kontext:\n${documentContext}` : '');
+
+              const lpTopics = await generateStructuredText(apiKey, lpPrompt, model, baseUrl);
+              setCurrentPrompt(prev => prev + 1);
+
+              lpSubcollections = lpTopics.map(lp => ({
+                title: lp.title,
+                shorttitle: lp.shorttitle,
+                properties: createProperties(
+                  lp.title,
+                  lp.shorttitle,
+                  lp.alternative_titles,
+                  lp.description,
+                  lp.keywords,
+                  DISCIPLINE_MAPPING[discipline],
+                  EDUCATIONAL_CONTEXT_MAPPING[context]
+                ),
+                subcollections: []
+              }));
+            }
+
+            return {
+              title: subTopic.title,
+              shorttitle: subTopic.shorttitle,
               properties: createProperties(
-                lp.title,
-                lp.shorttitle,
-                lp.alternative_titles,
-                lp.description,
-                lp.keywords,
+                subTopic.title,
+                subTopic.shorttitle,
+                subTopic.alternative_titles,
+                subTopic.description,
+                subTopic.keywords,
                 DISCIPLINE_MAPPING[discipline],
                 EDUCATIONAL_CONTEXT_MAPPING[context]
               ),
-              subcollections: []
-            }))
-          };
-        }));
+              subcollections: lpSubcollections
+            };
+          }));
+        }
 
         return {
           title: mainTopic.title,
@@ -233,9 +256,55 @@ export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, a
         };
       }));
 
-      // Create the final tree
+      // Add hardcoded categories if selected
+      let finalCollection = [...collection];
+      
+      if (includeAllgemeines === true) {
+        finalCollection.unshift({
+          title: "Allgemeines",
+          shorttitle: "ALG",
+          properties: createProperties(
+            "Allgemeines",
+            "ALG",
+            {
+              grundbildend: "Allgemeines",
+              allgemeinbildend: "Allgemeines",
+              berufsbildend: "Allgemeines",
+              akademisch: "Allgemeines"
+            },
+            "Allgemeine Grundlagen und übergreifende Aspekte",
+            ["allgemein", "grundlagen", "übergreifend"],
+            DISCIPLINE_MAPPING[discipline],
+            EDUCATIONAL_CONTEXT_MAPPING[context]
+          ),
+          subcollections: []
+        });
+      }
+
+      if (includeMethodik === true) {
+        finalCollection.push({
+          title: "Methodik und Didaktik",
+          shorttitle: "MUD",
+          properties: createProperties(
+            "Methodik und Didaktik",
+            "MUD",
+            {
+              grundbildend: "Methodik und Didaktik",
+              allgemeinbildend: "Methodik und Didaktik",
+              berufsbildend: "Methodik und Didaktik",
+              akademisch: "Methodik und Didaktik"
+            },
+            "Methodische und didaktische Aspekte der Vermittlung",
+            ["methodik", "didaktik", "vermittlung", "lehren"],
+            DISCIPLINE_MAPPING[discipline],
+            EDUCATIONAL_CONTEXT_MAPPING[context]
+          ),
+          subcollections: []
+        });
+      }
+
       const tree: TopicTree = {
-        collection,
+        collection: finalCollection,
         metadata: {
           title: title || topic,
           theme: topic,
@@ -271,7 +340,6 @@ export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, a
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Metadaten */}
       <div className="space-y-4">
         <div>
           <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
@@ -333,11 +401,10 @@ export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, a
         />
       </div>
 
-      {/* Themenanzahl Einstellungen */}
       <div className="grid grid-cols-3 gap-4">
         <div>
           <label htmlFor="numMain" className="block text-sm font-medium text-gray-700">
-            Oberkategorien
+            Hauptkategorien (1-30)
           </label>
           <input
             type="number"
@@ -345,35 +412,35 @@ export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, a
             value={numMain}
             onChange={(e) => setNumMain(Number(e.target.value))}
             min="1"
-            max="20"
+            max="30"
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
           />
         </div>
         <div>
           <label htmlFor="numSub" className="block text-sm font-medium text-gray-700">
-            Unterkategorien
+            Unterkategorien (0-30)
           </label>
           <input
             type="number"
             id="numSub"
             value={numSub}
             onChange={(e) => setNumSub(Number(e.target.value))}
-            min="1"
-            max="20"
+            min="0"
+            max="30"
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
           />
         </div>
         <div>
           <label htmlFor="numLehrplan" className="block text-sm font-medium text-gray-700">
-            Weitere Unterkategorien
+            W. Unterkategorien (0-30)
           </label>
           <input
             type="number"
             id="numLehrplan"
             value={numLehrplan}
             onChange={(e) => setNumLehrplan(Number(e.target.value))}
-            min="1"
-            max="20"
+            min="0"
+            max="30"
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
           />
         </div>
@@ -510,7 +577,7 @@ export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, a
                   className="rounded-full border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
                 <div className="ml-2">
-                  <span className="text-sm font-medium text-gray-700">Nur KI-Wissen</span>
+                  <span className="text-sm font-medium text-gray-700">Mit KI-Wissen</span>
                   <div className="w-2 h-2 inline-block ml-2 rounded-full bg-blue-100"></div>
                 </div>
               </label>
@@ -542,7 +609,7 @@ export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, a
                   className="rounded-full border-gray-300 text-green-600 focus:ring-green-500"
                 />
                 <div className="ml-2">
-                  <span className="text-sm font-medium text-gray-700">Nur Dokumente (direkt)</span>
+                  <span className="text-sm font-medium text-gray-700">Mit Dokumentenwissen</span>
                   <div className="w-2 h-2 inline-block ml-2 rounded-full bg-green-100"></div>
                 </div>
               </label>
@@ -558,7 +625,7 @@ export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, a
                   className="rounded-full border-gray-300 text-purple-600 focus:ring-purple-500"
                 />
                 <div className="ml-2">
-                  <span className="text-sm font-medium text-gray-700">Nur Dokumente mit Listensortierung</span>
+                  <span className="text-sm font-medium text-gray-700">Mit Dokumentenwissen (HK mit Listensortierung)</span>
                   <div className="w-2 h-2 inline-block ml-2 rounded-full bg-purple-100"></div>
                 </div>
               </label>
@@ -581,7 +648,6 @@ export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, a
         </div>
       </div>
 
-      {/* Generation Status */}
       {isGenerating && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -601,7 +667,6 @@ export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, a
         </div>
       )}
 
-      {/* Submit Button */}
       <div className="flex justify-end">
         <button
           type="submit"

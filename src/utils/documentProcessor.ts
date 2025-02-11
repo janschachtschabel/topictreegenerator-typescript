@@ -245,7 +245,7 @@ function splitTextIntoChunks(text: string, chunkSize: number = 1000, overlap: nu
   return chunks;
 }
 
-async function findRelevantChunks(chunks: string[], query: string, numChunks: number = 5): Promise<string[]> {
+async function findRelevantChunks(chunks: string[], query: string, numChunks: number = 50): Promise<string[]> {
   try {
     // Generate embedding for the query
     console.log('Generating query embedding...');
@@ -286,10 +286,9 @@ async function findRelevantChunks(chunks: string[], query: string, numChunks: nu
       .sort((a, b) => a - b); // Sort by original order
     
     // Return the most relevant chunks in original order
-    return indices.map(idx => chunks[idx]);
+    return indices.map(idx => successfulChunks[idx]);
   } catch (error) {
     console.error('Error in findRelevantChunks:', error);
-    console.error('Error finding relevant chunks:', error);
     // Fallback to first N chunks if embedding fails
     return chunks.slice(0, numChunks);
   } 
@@ -336,21 +335,22 @@ export async function processDocument(file: File): Promise<string> {
     // Initialize pipeline early
     await getEmbeddingPipeline();
     
-    // Find most relevant chunks using embeddings
-    const relevantChunks = await findRelevantChunks(chunks, queryContext, 5);
-    const processedContent = relevantChunks.join('\n\n');
+    // Find most relevant chunks for initial display
+    const relevantChunks = await findRelevantChunks(chunks, queryContext, 100);
     
-    // Store document in Supabase
+    // Store document in Supabase with both full text and chunks
     const { error: insertError } = await supabase
       .from('documents')
       .insert({
         title: file.name,
-        content: processedContent,
+        content: text, // Store complete text
         file_type: file.type,
         user_id: user.data.user.id,
         metadata: {
           original_size: file.size,
-          processing_date: new Date().toISOString()
+          processing_date: new Date().toISOString(),
+          chunks: chunks, // Store all chunks in metadata
+          relevantChunks: relevantChunks // Store initially relevant chunks
         }
       });
 
@@ -358,7 +358,9 @@ export async function processDocument(file: File): Promise<string> {
       console.error('Error storing document:', insertError);
       throw new Error('Dokument konnte nicht gespeichert werden');
     }
-    return processedContent;
+
+    // Return relevant chunks for display
+    return relevantChunks.join('\n\n');
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unbekannter Fehler';
     console.error('Fehler bei der Dokumentenverarbeitung:', {

@@ -28,7 +28,11 @@ WICHTIG:
 - Hauptkategorien müssen sich klar voneinander abgrenzen
 - Maximal 5 Hauptkategorien pro Dokument
 - Verwende präzise, aussagekräftige Bezeichnungen
-- Vermeide Überschneidungen zwischen Kategorien`;
+- Vermeide Überschneidungen zwischen Kategorien
+- Grundbildend: Grundlegende Auseinandersetzung mit einem Thema, oft als Einstieg in einen Bereich, Ziele: Förderung der motorischen Entwicklung, Entwicklung und Erlernen von Sprache, Erwerb grundlegender sozialer Fähigkeiten, Zielgruppen: Kinder im Kita- oder Vorschulalter, Erwachsene, die grundlegende Fähigkeiten später erwerben (z. B. Lesen oder Schreiben), Merkmale: Altersunabhängig, Vermittlung von essenziellen Grundlagen für den weiteren Bildungsweg oder die persönliche Entwicklung
+- Allgemeinbildend: Vermittlung von Basiswissen und Kompetenzen für ein breites Verständnis der Welt, Inhalte: Mathematik, Geschichte, Sprachen, Weitere grundlegende Wissensgebiete, Bildungskontexte: Formales Bildungssystem (z. B. Schulen), Informelle Bildung (z. B. Volkshochschulen, Kulturangebote), Ziele: Aufbau einer breiten Wissensbasis, Förderung vielseitiger Fähigkeiten, Unabhängigkeit von beruflicher Spezialisierung, Merkmale: Ermöglicht kulturelle Orientierung, Unterstützt allgemeines Verständnis und gesellschaftliche Teilhabe
+- Berufsbildend: Praxis- und anwendungsorientierte Vermittlung von berufsspezifischen Fähigkeiten und Qualifikationen, Inhalte: Technische Fertigkeiten, Wirtschaftliches Wissen, Fachspezifische Anwendungen, Ziele: Vorbereitung auf die Anforderungen eines bestimmten Berufsfeldes, Unterstützung des Übergangs in den Arbeitsmarkt, Förderung der beruflichen Weiterentwicklung, Spezialisierung in einem Berufsfeld, Merkmale: Direkter Bezug zu beruflichen Anforderungen, Vermittlung praxisnaher Kompetenzen, Beitrag zur individuellen Karriereentwicklung
+- Akademisch: Bildung, die durch Fachsprache und wissenschaftliche Methodik geprägt ist, Merkmale: Forschungsmethodik und -orientierung, Vertiefte Auseinandersetzung mit spezifischen Fachgebieten, Analytisch fundierte und theoretische Fragestellungen, Hohes Maß an Abstraktionsvermögen erforderlich, Bildungskontexte: Universitäten, Wissenschaftliche Einrichtungen, Zielgruppen: Personen, die ein vertieftes Verständnis eines Fachbereichs anstreben, Personen mit Interesse an wissenschaftlichem Arbeiten, Ziele: Entwicklung eines tiefgehenden Fachwissens, Förderung wissenschaftlicher Kompetenzen, Vorbereitung auf forschungsorientierte Berufe`;
 
 export const SECTOR_SUMMARY_PROMPT = `Fasse die folgenden Hauptkategorien für den Bildungssektor '{sector}' zusammen:
 
@@ -43,9 +47,15 @@ Erstelle eine konsolidierte Liste von maximal {num_main} Hauptkategorien, die:
 Formatiere die Antwort als JSON-Array mit den Kategorienamen:
 ["Kategorie1", "Kategorie2", ...]`;
 
-export const MAIN_PROMPT_TEMPLATE = `Erstelle eine Liste von {num_main} Hauptthemen für einen Themenbaum zum Thema '{themenbaumthema}'{discipline_info}{context_info}{sector_info}. 
+export const MAIN_PROMPT_TEMPLATE = `Erstelle eine Liste von {num_main} Hauptthemen für einen Themenbaum zum Thema '{themenbaumthema}', Disziplin: {discipline_info}, Kontext: {context_info}, Bildungssektor: {sector_info}. 
 
-WICHTIG: Dies ist die ERSTE EBENE des dreigliedrigen Themenbaums. Generiere die wichtigsten übergeordneten Themenbereiche des Fachs.
+WICHTIG: Dies ist die ERSTE EBENE des dreigliedrigen Themenbaums. 
+
+PFLICHTTHEMEN:
+{include_allgemeines}
+{include_methodik}
+
+AUFGABE: Generiere die wichtigsten übergeordneten Themenbereiche des Fachs unter Berücksichtigung der Pflichtthemen.
 
 1. HIERARCHIE-REGELN:
    - Erste Ebene: Übergeordnete Themenbereiche des Fachs (z.B. "Organische Chemie", "Theoretische Chemie")
@@ -114,7 +124,7 @@ WICHTIG - Alternative Titel für Bildungssektoren:
    - Definition: Praxis- und anwendungsorientierte Vermittlung von berufsspezifischen Fähigkeiten und Qualifikationen
    - Inhalte: Technische Fertigkeiten, Wirtschaftliches Wissen, Fachspezifische Anwendungen
    - Ziele: Vorbereitung auf die Anforderungen eines bestimmten Berufsfeldes, Unterstützung des Übergangs in den Arbeitsmarkt, Förderung der beruflichen Weiterentwicklung, Spezialisierung in einem Berufsfeld
-   - - Merkmale: Direkter Bezug zu beruflichen Anforderungen, Vermittlung praxisnaher Kompetenzen, Beitrag zur individuellen Karriereentwicklung
+   - Merkmale: Direkter Bezug zu beruflichen Anforderungen, Vermittlung praxisnaher Kompetenzen, Beitrag zur individuellen Karriereentwicklung
    - Praxisorientierte Fachbegriffe
    - Berufsbezogene Terminologie
    - Anwendungsorientiert
@@ -133,7 +143,7 @@ WICHTIG - Alternative Titel für Bildungssektoren:
 
 Wo es möglich ist, Hauptthemen zu bilden die bildungsbereichsübergreifend für mehrere Bildungssektoren relevant sind,
 sollte dies getan werden. Der Titel stellt dann den übergreifenden Begriff dar und die alternativen Titel
-sind die an den typsischen Sprachgebrauch angepassten Bezeichnungen des jeweiligen Bildungssektorsrs.
+sind die an den typsischen Sprachgebrauch angepassten Bezeichnungen des jeweiligen Bildungssektors.
 
 Bitte achte darauf, das es Hauptthemen gibt, die nicht für alle Bildungssektoren relevant sind.
 In diesen Fällen werden alternative Titel nur für relevante Bildungssektoren erzeugt und andere alternative Titel leer gelassen.
@@ -235,7 +245,7 @@ WICHTIG - Alternative Titel für Bildungssektoren:
    - Definition: Praxis- und anwendungsorientierte Vermittlung von berufsspezifischen Fähigkeiten und Qualifikationen
    - Inhalte: Technische Fertigkeiten, Wirtschaftliches Wissen, Fachspezifische Anwendungen
    - Ziele: Vorbereitung auf die Anforderungen eines bestimmten Berufsfeldes, Unterstützung des Übergangs in den Arbeitsmarkt, Förderung der beruflichen Weiterentwicklung, Spezialisierung in einem Berufsfeld
-   - - Merkmale: Direkter Bezug zu beruflichen Anforderungen, Vermittlung praxisnaher Kompetenzen, Beitrag zur individuellen Karriereentwicklung
+   - Merkmale: Direkter Bezug zu beruflichen Anforderungen, Vermittlung praxisnaher Kompetenzen, Beitrag zur individuellen Karriereentwicklung
    - Praxisorientierte Fachbegriffe
    - Berufsbezogene Terminologie
    - Anwendungsorientiert
@@ -359,10 +369,10 @@ WICHTIG - Alternative Titel für Bildungssektoren:
    - Beispiel: "Kunststoffe"
 
 3. Berufsbildend:
-   - Definition: Praxis- und anwendungsorientierte Vermittlung von berufsspezifischen Fähigkeiten und Qualifikationen
+   - Definition: Praxis- und anwendungsorientierte Vermittlung von berufsspezifischen Fäh igkeiten und Qualifikationen
    - Inhalte: Technische Fertigkeiten, Wirtschaftliches Wissen, Fachspezifische Anwendungen
    - Ziele: Vorbereitung auf die Anforderungen eines bestimmten Berufsfeldes, Unterstützung des Übergangs in den Arbeitsmarkt, Förderung der beruflichen Weiterentwicklung, Spezialisierung in einem Berufsfeld
-   - - Merkmale: Direkter Bezug zu beruflichen Anforderungen, Vermittlung praxisnaher Kompetenzen, Beitrag zur individuellen Karriereentwicklung
+   - Merkmale: Direkter Bezug zu beruflichen Anforderungen, Vermittlung praxisnaher Kompetenzen, Beitrag zur individuellen Karriereentwicklung
    - Praxisorientierte Fachbegriffe
    - Berufsbezogene Terminologie
    - Anwendungsorientiert
@@ -386,7 +396,7 @@ sind im typsischen Sprachgebrauch des Bildungssektors gehalten.
 Bitte achte darauf, das es weitere Unterthemen gibt, die nicht für alle Bildungssektoren relevant sind.
 In diesen Fällen werden alternative Titel nur für relevante Bildungssektoren erzeugt.
 
-Bsp. für alternative Titel zu einem weiteren Unterthemea in Deutsch:
+Bsp. für alternative Titel zu einem weiteren Unterthema in Deutsch:
 
 grundbildend: Bilderbücher verstehen
 allgemeinbildend: Sachtexte verstehen

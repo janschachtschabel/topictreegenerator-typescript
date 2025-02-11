@@ -1,162 +1,160 @@
 # Themenbaum Generator
 
-A powerful web application for generating and managing hierarchical topic trees, specifically designed for educational content structuring. Built with React, TypeScript, and Supabase.
+Eine leistungsstarke Webanwendung zur Generierung und Verwaltung hierarchischer Themenbäume, speziell entwickelt für die Strukturierung von Bildungsinhalten.
 
-## Core Features
+## Hauptfunktionen
 
-### AI-Powered Topic Generation
-- Multiple AI models support (GPT-4o-mini, GPT-4o)
-- Configurable number of main topics, subtopics, and curriculum topics
-- Intelligent topic hierarchy generation
-- Context-aware topic suggestions
-- Sector-specific terminology adaptation
+### KI-gestützte Themengenerierung
+- Unterstützung mehrerer KI-Modelle (GPT-4o-mini, GPT-4o, O3-mini)
+- Konfigurierbare Anzahl von Haupt-, Unter- und Lehrplanthemen
+- Intelligente Hierarchiegenerierung
+- Kontextbewusste Themenvorschläge
+- Sektorspezifische Terminologieanpassung
 
-### Document Processing
-- Support for multiple file formats:
-  - PDF (with text extraction)
-  - DOCX (with formatting preservation)
+### Dokumentenverarbeitung
+- Unterstützte Dateiformate:
+  - PDF (mit Textextraktion)
+  - DOCX (mit Formatierungserhalt)
   - RTF
   - TXT
-- Semantic chunking for large documents
-- Embedding-based relevance analysis
-- Automatic document categorization
-- Sector-specific content analysis
+- Semantische Textzerlegung für große Dokumente
+- Embedding-basierte Relevanzanalyse
+- Automatische Dokumentenkategorisierung
+- Sektorspezifische Inhaltsanalyse
 
-### Knowledge Sources
-- AI Knowledge Only: Pure AI-generated topic trees
-- AI + Documents: Combined knowledge from AI and uploaded documents
-- Documents Only: Topic trees based solely on document content
-- Documents with Sorting: Intelligent document analysis with sector-based categorization
-- Manual Creation: Custom topic tree creation
+### Wissensquellen
+- Reines KI-Wissen: Generierung basierend auf KI-Modellen
+- KI + Dokumente: Kombiniertes Wissen aus KI und hochgeladenen Dokumenten
+- Nur Dokumente: Themenbäume basierend auf Dokumenteninhalten
+- Dokumente mit Sortierung: Intelligente Dokumentenanalyse mit sektorbasierter Kategorisierung
+- Manuelle Erstellung: Individuelle Themenbaumgestaltung
 
-### Interactive Tree Editor
-- Visual tree structure editor
-- Real-time updates
-- Drag-and-drop organization
-- Node editing capabilities:
-  - Title and short title
-  - Descriptions
-  - Keywords
-  - Sector-specific alternative titles
-- Multi-level hierarchy support
+### Interaktiver Baumeditor
+- Visuelle Baumstruktur-Bearbeitung
+- Echtzeit-Aktualisierungen
+- Drag-and-Drop Organisation
+- Knoteneigenschaften:
+  - Titel und Kurztitel
+  - Beschreibungen
+  - Schlagwörter
+  - Sektorspezifische alternative Titel
 
-### Educational Sector Support
-- Grundbildend (Basic Education)
-- Allgemeinbildend (General Education)
-- Berufsbildend (Vocational Education)
-- Akademisch (Academic Education)
+### Bildungssektoren
+- Grundbildend
+- Allgemeinbildend
+- Berufsbildend
+- Akademisch
 
-### View Modes
-- Tree View: Traditional hierarchical display
-- ASCII View: Text-based tree visualization
-- Sector Comparison: Side-by-side view of different sectors
+### Ansichtsmodi
+- Baumansicht: Hierarchische Darstellung
+- ASCII-Ansicht: Textbasierte Baumvisualisierung
+- Sektorvergleich: Parallele Ansicht verschiedener Sektoren
 
-### Export Options
-- JSON export for full tree data
-- ASCII tree export for plain text representation
-- Category lists export for document analysis results
+### Exportoptionen
+- JSON-Export für vollständige Baumdaten
+- ASCII-Baum Export für Textdarstellung
+- Export von Kategorielisten aus der Dokumentenanalyse
 
-### User Management
-- Secure email/password authentication
-- Personal topic tree storage
-- Document management
-- Data deletion options
+### Benutzerverwaltung
+- Sichere E-Mail/Passwort-Authentifizierung
+- Persönliche Themenbaumspeicherung
+- Dokumentenverwaltung
+- Datenlöschoptionen
 
-### Special Categories
-- Optional "Allgemeines" (General) section
-  - AI-generated or hardcoded
-  - Sector-specific content
-- Optional "Methodik und Didaktik" (Methodology and Didactics) section
-  - AI-generated or hardcoded
-  - Teaching methods and approaches
+### Spezielle Kategorien
+- Optionale "Allgemeines"-Sektion
+  - KI-generiert oder vordefiniert
+  - Sektorspezifische Inhalte
+- Optionale "Methodik und Didaktik"-Sektion
+  - KI-generiert oder vordefiniert
+  - Lehr- und Lernmethoden
 
-## Technical Features
+## Technische Features
 
-### Document Processing
-- Efficient text extraction from PDFs
-- DOCX processing with Mammoth.js
-- RTF and TXT support
-- Automatic text chunking
-- Embedding generation with Transformers.js
-- Semantic similarity analysis
-- Automatic sector classification
+### Dokumentenverarbeitung
+- Effiziente PDF-Textextraktion
+- DOCX-Verarbeitung mit Mammoth.js
+- RTF- und TXT-Unterstützung
+- Automatische Textzerlegung
+- Embedding-Generierung mit Transformers.js
+- Semantische Ähnlichkeitsanalyse
+- Automatische Sektorklassifizierung
 
-### Database Integration
-- Supabase backend
-- Real-time updates
+### Datenbankintegration
+- Supabase Backend
+- Echtzeit-Updates
 - Row Level Security
-- Full-text search capabilities
-- Document metadata storage
-- User data isolation
+- Volltextsuche
+- Dokumenten-Metadatenspeicherung
+- Benutzerdatenisolierung
 
 ### UI/UX
-- Responsive design
-- Loading states and progress indicators
-- Error handling and user feedback
-- Intuitive navigation
-- Modern, clean interface
-- Tailwind CSS styling
+- Responsives Design
+- Ladezustände und Fortschrittsanzeigen
+- Fehlerbehandlung und Benutzerfeedback
+- Intuitive Navigation
+- Moderne, aufgeräumte Oberfläche
+- Tailwind CSS Styling
 
-## Prerequisites
+## Voraussetzungen
 
-- Node.js 18 or higher
-- npm 9 or higher
-- OpenAI API key
-- Supabase account
+- Node.js 18 oder höher
+- npm 9 oder höher
+- Supabase-Konto
 
-## Environment Variables
+## Umgebungsvariablen
 
-Create a `.env` file in the root directory with:
+Erstellen Sie eine `.env`-Datei im Hauptverzeichnis mit:
 
 ```env
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_SUPABASE_URL=ihre_supabase_url
+VITE_SUPABASE_ANON_KEY=ihr_supabase_anon_key
 ```
 
 ## Installation
 
-1. Clone the repository:
+1. Repository klonen:
 ```bash
 git clone [repository-url]
 cd themenbaum-generator
 ```
 
-2. Install dependencies:
+2. Abhängigkeiten installieren:
 ```bash
 npm install
 ```
 
-3. Start the development server:
+3. Entwicklungsserver starten:
 ```bash
 npm run dev
 ```
 
-## Project Structure
+## Projektstruktur
 
 ```
 src/
-├── components/         # React components
-│   ├── Auth.tsx       # Authentication component
-│   ├── DocumentUpload.tsx # Document processing
-│   ├── TopicForm.tsx  # Main form component
-│   └── TreeView.tsx   # Tree visualization
-├── constants/         # Constants and mappings
-│   ├── mappings.ts   # Educational sector mappings
-│   └── prompts.ts    # AI prompt templates
-├── types/            # TypeScript definitions
-│   ├── TopicTree.ts  # Tree structure types
-│   └── supabase.ts   # Database types
-├── utils/            # Utility functions
-│   ├── documentProcessor.ts # Document handling
-│   ├── openai.ts     # AI integration
-│   ├── supabase.ts   # Database client
-│   └── treeUtils.ts  # Tree manipulation
-└── App.tsx           # Main application component
+├── components/         # React-Komponenten
+│   ├── Auth.tsx       # Authentifizierung
+│   ├── DocumentUpload.tsx # Dokumentenverarbeitung
+│   ├── TopicForm.tsx  # Hauptformular
+│   └── TreeView.tsx   # Baumvisualisierung
+├── constants/         # Konstanten und Mappings
+│   ├── mappings.ts   # Bildungssektor-Mappings
+│   └── prompts.ts    # KI-Prompt-Templates
+├── types/            # TypeScript-Definitionen
+│   ├── TopicTree.ts  # Baumstruktur-Typen
+│   └── supabase.ts   # Datenbanktypen
+├── utils/            # Hilfsfunktionen
+│   ├── documentProcessor.ts # Dokumentenverarbeitung
+│   ├── openai.ts     # KI-Integration
+│   ├── supabase.ts   # Datenbank-Client
+│   └── treeUtils.ts  # Baummanipulation
+└── App.tsx           # Hauptanwendungskomponente
 ```
 
-## Database Schema
+## Datenbankschema
 
-### Topic Trees
+### Themenbäume
 ```sql
 CREATE TABLE topic_trees (
   id uuid PRIMARY KEY,
@@ -168,7 +166,7 @@ CREATE TABLE topic_trees (
 );
 ```
 
-### Documents
+### Dokumente
 ```sql
 CREATE TABLE documents (
   id uuid PRIMARY KEY,
@@ -181,42 +179,29 @@ CREATE TABLE documents (
 );
 ```
 
-## Production Deployment
+## Sicherheitsfunktionen
 
-The application is deployed on Netlify and can be accessed at:
-https://visionary-mandazi-1f971b.netlify.app
+- Row Level Security (RLS) aktiviert
+- Benutzerdatenisolierung
+- Sicherer Authentifizierungsablauf
+- Geschützte API-Endpunkte
+- Sichere Dokumentenverarbeitung
+- Eingabevalidierung
+- Fehlerbehandlung
 
-## Security Features
+## Leistungsoptimierungen
 
-- Row Level Security (RLS) enabled
-- User data isolation
-- Secure authentication flow
-- Protected API endpoints
-- Safe document processing
-- Input validation
-- Error handling
+- Effiziente Dokumentenzerlegung
+- Optimierte Embedding-Generierung
+- Lazy Loading von Komponenten
+- Caching-Strategien
+- Minimierte API-Aufrufe
+- Effizientes Baumrendering
 
-## Performance Optimizations
+## Lizenz
 
-- Efficient document chunking
-- Optimized embedding generation
-- Lazy loading of components
-- Caching strategies
-- Minimized API calls
-- Efficient tree rendering
-
-## License
-
-MIT License
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+MIT-Lizenz
 
 ## Support
 
-For support, please open an issue in the repository or contact the development team.
+Bei Fragen oder Problemen öffnen Sie bitte ein Issue im Repository.
