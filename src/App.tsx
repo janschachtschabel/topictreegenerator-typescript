@@ -2,14 +2,15 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { pipeline, env, type Pipeline, type PipelineType } from '@xenova/transformers';
 import { supabase } from './utils/supabase';
 import { useState, useEffect, ReactNode } from 'react';
-import { Loader2, Trash2, LogOut, Settings, FileText, Eye } from 'lucide-react';
+import { Loader2, Trash2, LogOut, Settings, FileText, Eye, Star } from 'lucide-react';
 import { Auth } from './components/Auth';
 import TopicForm from './components/TopicForm';
 import TreeView from './components/TreeView';
+import EvaluationView from './components/EvaluationView';
 import type { TopicTree, Collection } from './types/TopicTree';
 import { LLMProvider, LLM_PROVIDERS, getDefaultProvider, getDefaultModel } from './types/LLMProvider';
 
-type View = 'generate' | 'preview';
+type View = 'generate' | 'preview' | 'evaluate';
 
 interface TabProps {
   icon: ReactNode;
@@ -36,7 +37,12 @@ function Tab({ icon, label, isActive, onClick }: TabProps) {
 
 export default function App() {
   const [showAISettings, setShowAISettings] = useState(false);
-  const [apiKey, setApiKey] = useState('');
+  const [apiKey, setApiKey] = useState(() => {
+    // Try to get API key from environment first, then localStorage
+    const envApiKey = import.meta.env.VITE_OPENAI_API_KEY;
+    const storedApiKey = localStorage.getItem('apiKey');
+    return envApiKey || storedApiKey || '';
+  });
   const [model, setModel] = useState('gpt-4o-mini');
   const [provider, setProvider] = useState<LLMProvider>(getDefaultProvider());
   const [baseUrl, setBaseUrl] = useState(provider.baseUrl);
@@ -61,6 +67,13 @@ export default function App() {
     // Set default model for new provider
     setModel(getDefaultModel(provider).id);
   }, [provider]);
+
+  // Save API key to localStorage when it changes
+  useEffect(() => {
+    if (apiKey) {
+      localStorage.setItem('apiKey', apiKey);
+    }
+  }, [apiKey]);
 
   // Check for existing session
   useEffect(() => {
@@ -360,31 +373,65 @@ export default function App() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Nicht angemeldet');
 
-      const { data, error } = await supabase
+      // First check if a tree with this title already exists
+      const { data: existingTree, error: fetchError } = await supabase
+        .from('topic_trees')
+        .select('id, title')
+        .eq('user_id', user.id)
+        .eq('title', updatedTree.metadata.title)
+        .single();
+
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 means no rows returned
+        throw fetchError;
+      }
+
+      if (existingTree) {
+        // Ask user if they want to update the existing tree
+        const shouldUpdate = window.confirm(
+          `Ein Themenbaum mit dem Titel "${updatedTree.metadata.title}" existiert bereits. ` +
+          'Möchten Sie den bestehenden Themenbaum aktualisieren?'
+        );
+
+        if (!shouldUpdate) {
+          // Ask for a new title
+          const newTitle = window.prompt(
+            'Bitte geben Sie einen neuen Titel für den Themenbaum ein:',
+            `${updatedTree.metadata.title} (Kopie)`
+          );
+
+          if (!newTitle) {
+            throw new Error('Speichern abgebrochen');
+          }
+
+          // Update the tree title
+          updatedTree.metadata.title = newTitle.trim();
+        }
+      }
+
+      // Now save/update the tree
+      const { error } = await supabase
         .from('topic_trees')
         .upsert({
           tree_data: updatedTree,
           title: updatedTree.metadata.title,
           user_id: user.id
-        }, {
-          onConflict: 'user_id,title',
-          ignoreDuplicates: false
-        })
-        .select('id')
-        .single();
+        });
 
       if (error) throw error;
 
-      if (data) {
-        setCurrentTreeId(data.id);
-        setTree(updatedTree);
-        void loadSavedTrees();
-      }
-
-      return data?.id;
+      setTree(updatedTree);
+      void loadSavedTrees();
     } catch (error) {
       console.error('Error updating tree:', error);
-      alert('Fehler beim Speichern des Themenbaums');
+      if (error instanceof Error) {
+        alert(
+          error.message === 'Speichern abgebrochen'
+            ? error.message
+            : 'Fehler beim Speichern des Themenbaums'
+        );
+      } else {
+        alert('Fehler beim Speichern des Themenbaums');
+      }
       throw error;
     } finally {
       setIsSaving(false);
@@ -406,7 +453,7 @@ export default function App() {
       <div className="bg-white shadow">
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
           <h1 className="text-2xl font-bold text-gray-900">
-            {currentView === 'generate' ? 'Themenbaum Generator' : 'Themenbäume'}
+            {currentView === 'generate' ? 'Themenbaum Generator' : currentView === 'preview' ? 'Themenbäume' : 'Themenbaum Evaluation'}
           </h1>
           <div className="flex items-center space-x-4">
             <div className="flex space-x-2 mr-4">
@@ -421,6 +468,12 @@ export default function App() {
                 label="Vorschau"
                 isActive={currentView === 'preview'}
                 onClick={() => setCurrentView('preview')}
+              />
+              <Tab
+                icon={<Star className="w-4 h-4" />}
+                label="Evaluation"
+                isActive={currentView === 'evaluate'}
+                onClick={() => setCurrentView('evaluate')}
               />
             </div>
             <button
@@ -544,9 +597,17 @@ export default function App() {
           </div>
         </div>
       )}
+      
+      {currentView === 'evaluate' && (
+        <div className="container mx-auto px-4 py-8">
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <EvaluationView tree={tree} />
+          </div>
+        </div>
+      )}
 
       <div className="container mx-auto px-4 py-8">
-        {currentView === 'generate' ? (
+        {currentView === 'generate' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-6">
               <div className="bg-white rounded-lg shadow-lg p-6">
@@ -654,7 +715,8 @@ export default function App() {
               </div>
             </div>
           </div>
-        ) : (
+        )}
+        {currentView === 'preview' && (
           <div className="space-y-8">
             <div className="bg-white rounded-lg shadow-lg p-6">
               <div className="flex justify-between items-center mb-6">

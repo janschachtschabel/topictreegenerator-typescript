@@ -4,6 +4,8 @@ import OpenAI from 'openai';
 import { encode } from 'gpt-tokenizer';
 import { decode } from 'gpt-tokenizer';
 
+import { getMainPromptTemplate } from '../constants/treePrompts';
+
 export class OpenAIError extends Error {
   constructor(message: string, public readonly status?: number) {
     super(message);

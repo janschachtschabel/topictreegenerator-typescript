@@ -1,4 +1,5 @@
-import { ChevronDown, ChevronRight, Download, Edit2, Trash2, Plus, Save, X, FileText, Columns, List } from 'lucide-react';
+import { ChevronDown, ChevronRight, Download, Edit2, Trash2, Plus, Save, X, FileText, Columns, List, Network } from 'lucide-react';
+import InterconnectedTreeView from './InterconnectedTreeView';
 import { useState } from 'react';
 import { TopicTree, Collection } from '../types/TopicTree';
 import { generateAsciiTree, filterTreeBySector } from '../utils/treeUtils';
@@ -289,7 +290,7 @@ function TreeNode({ node, level, selectedSector, onUpdate, onDelete, onAdd }: Tr
   );
 }
 
-type ViewMode = 'tree' | 'ascii' | 'comparison';
+type ViewMode = 'tree' | 'ascii' | 'comparison' | 'interconnected';
 
 export default function TreeView({ tree, onUpdate }: TreeViewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('tree');
@@ -555,7 +556,18 @@ export default function TreeView({ tree, onUpdate }: TreeViewProps) {
               }`}
             >
               <Columns className="w-4 h-4 mr-1" />
-              Sektorvergleich
+              Vergleich
+            </button>
+            <button
+              onClick={() => setViewMode('interconnected')}
+              className={`px-3 py-1 text-sm rounded-md flex items-center ${
+                viewMode === 'interconnected' 
+                  ? 'bg-indigo-100 text-indigo-700' 
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              }`}
+            >
+              <Network className="w-4 h-4 mr-1" />
+              Verbindungen
             </button>
           </div>
           <div className="flex items-center space-x-2">
@@ -623,6 +635,8 @@ export default function TreeView({ tree, onUpdate }: TreeViewProps) {
             </div>
           ))}
         </div>
+      ) : viewMode === 'interconnected' ? (
+        <InterconnectedTreeView tree={tree} />
       ) : (
         <div className="border rounded-lg p-4">
           {(filteredTree?.collection || []).map((node, index) => (

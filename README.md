@@ -1,207 +1,188 @@
 # Themenbaum Generator
 
-Eine leistungsstarke Webanwendung zur Generierung und Verwaltung hierarchischer Themenbäume, speziell entwickelt für die Strukturierung von Bildungsinhalten.
+Ein leistungsstarkes Webtool zur Generierung und Verwaltung von hierarchischen Themenbäumen, speziell entwickelt für die Strukturierung von Bildungsinhalten. Entwickelt mit React, TypeScript und Supabase.
 
-## Hauptfunktionen
+## 🌟 Hauptfunktionen
 
-### KI-gestützte Themengenerierung
-- Unterstützung mehrerer KI-Modelle (GPT-4o-mini, GPT-4o, O3-mini)
-- Konfigurierbare Anzahl von Haupt-, Unter- und Lehrplanthemen
-- Intelligente Hierarchiegenerierung
-- Kontextbewusste Themenvorschläge
-- Sektorspezifische Terminologieanpassung
+### 🤖 KI-gestützte Themengenerierung
+- **Mehrere KI-Modelle**: Unterstützung für GPT-4o-mini, GPT-4o, O3-mini
+- **Flexible Konfiguration**: Einstellbare Anzahl von Haupt-, Unter- und Lehrplanthemen
+- **Intelligente Hierarchie**: Automatische Generierung sinnvoller Themenstrukturen
+- **Kontextbewusste Vorschläge**: Berücksichtigung des Bildungskontexts
+- **Sektorspezifische Anpassung**: Automatische Anpassung der Terminologie
 
-### Dokumentenverarbeitung
-- Unterstützte Dateiformate:
+### 📄 Dokumentenverarbeitung
+- **Unterstützte Formate**:
   - PDF (mit Textextraktion)
   - DOCX (mit Formatierungserhalt)
   - RTF
   - TXT
-- Semantische Textzerlegung für große Dokumente
-- Embedding-basierte Relevanzanalyse
-- Automatische Dokumentenkategorisierung
-- Sektorspezifische Inhaltsanalyse
+- **Intelligente Verarbeitung**:
+  - Semantische Textzerlegung
+  - Embedding-basierte Relevanzanalyse
+  - Automatische Dokumentenkategorisierung
+  - Sektorspezifische Inhaltsanalyse
 
-### Wissensquellen
-- Reines KI-Wissen: Generierung basierend auf KI-Modellen
-- KI + Dokumente: Kombiniertes Wissen aus KI und hochgeladenen Dokumenten
-- Nur Dokumente: Themenbäume basierend auf Dokumenteninhalten
-- Dokumente mit Sortierung: Intelligente Dokumentenanalyse mit sektorbasierter Kategorisierung
-- Manuelle Erstellung: Individuelle Themenbaumgestaltung
+### 🔄 Wissensquellen
+1. **Reines KI-Wissen**: Generierung basierend auf KI-Modellen
+2. **KI + Dokumente**: Kombination von KI und hochgeladenen Dokumenten
+3. **Nur Dokumente**: Themenbäume aus Dokumenteninhalten
+4. **Dokumente mit Sortierung**: Intelligente Dokumentenanalyse mit Sektorkategorisierung
+5. **Manuelle Erstellung**: Eigene Themenbäume erstellen
 
-### Interaktiver Baumeditor
-- Visuelle Baumstruktur-Bearbeitung
-- Echtzeit-Aktualisierungen
-- Drag-and-Drop Organisation
-- Knoteneigenschaften:
+### 🎨 Interaktiver Baumeditor
+- **Visuelle Bearbeitung**: Intuitive Baumstruktur-Bearbeitung
+- **Echtzeit-Updates**: Sofortige Aktualisierung der Änderungen
+- **Drag & Drop**: Organisation per Drag & Drop
+- **Knotenbearbeitung**:
   - Titel und Kurztitel
   - Beschreibungen
-  - Schlagwörter
-  - Sektorspezifische alternative Titel
+  - Schlagworte
+  - Sektorspezifische Alternativtitel
 
-### Bildungssektoren
-- Grundbildend
-- Allgemeinbildend
-- Berufsbildend
-- Akademisch
+### 🎓 Bildungssektoren
+- **Grundbildend**: Grundlegende Bildungsinhalte
+- **Allgemeinbildend**: Allgemeine Bildung
+- **Berufsbildend**: Berufliche Bildung
+- **Akademisch**: Hochschulbildung
 
-### Ansichtsmodi
-- Baumansicht: Hierarchische Darstellung
-- ASCII-Ansicht: Textbasierte Baumvisualisierung
-- Sektorvergleich: Parallele Ansicht verschiedener Sektoren
+### 👁️ Ansichtsmodi
+- **Baumansicht**: Klassische hierarchische Darstellung
+- **ASCII-Ansicht**: Textbasierte Baumvisualisierung
+- **Sektorvergleich**: Parallele Ansicht verschiedener Sektoren
+- **Verbindungsansicht**: Interaktive Visualisierung der Beziehungen
 
-### Exportoptionen
-- JSON-Export für vollständige Baumdaten
-- ASCII-Baum Export für Textdarstellung
-- Export von Kategorielisten aus der Dokumentenanalyse
+### 📊 Evaluierung
+- Automatische Qualitätsbewertung
+- Detaillierte Verbesserungsvorschläge
+- Sektorspezifische Analyse
 
-### Benutzerverwaltung
-- Sichere E-Mail/Passwort-Authentifizierung
-- Persönliche Themenbaumspeicherung
-- Dokumentenverwaltung
-- Datenlöschoptionen
+## 🚀 Erste Schritte
 
-### Spezielle Kategorien
-- Optionale "Allgemeines"-Sektion
-  - KI-generiert oder vordefiniert
-  - Sektorspezifische Inhalte
-- Optionale "Methodik und Didaktik"-Sektion
-  - KI-generiert oder vordefiniert
-  - Lehr- und Lernmethoden
+### Voraussetzungen
+- Node.js 18 oder höher
+- npm 9 oder höher
+- OpenAI API-Schlüssel
+- Supabase-Konto
 
-## Technische Features
+### Installation
+
+1. Repository klonen:
+\`\`\`bash
+git clone [repository-url]
+cd themenbaum-generator
+\`\`\`
+
+2. Abhängigkeiten installieren:
+\`\`\`bash
+npm install
+\`\`\`
+
+3. Umgebungsvariablen konfigurieren:
+   - Erstellen Sie eine \`.env\` Datei im Hauptverzeichnis
+   - Fügen Sie folgende Variablen hinzu:
+   \`\`\`env
+   VITE_SUPABASE_URL=ihre_supabase_url
+   VITE_SUPABASE_ANON_KEY=ihr_supabase_anon_key
+   VITE_OPENAI_API_KEY=ihr_openai_api_key
+   \`\`\`
+
+4. Entwicklungsserver starten:
+\`\`\`bash
+npm run dev
+\`\`\`
+
+## 💡 Nutzungsanleitung
+
+### 1. Anmeldung
+- Registrieren Sie sich mit E-Mail und Passwort
+- Oder melden Sie sich mit bestehenden Zugangsdaten an
+
+### 2. KI-Einstellungen
+- Klicken Sie auf "KI-Einstellungen"
+- Wählen Sie den gewünschten KI-Provider
+- Geben Sie Ihren API-Schlüssel ein
+- Wählen Sie das zu verwendende Modell
+
+### 3. Themenbaum erstellen
+
+#### Option A: KI-Generierung
+1. Wählen Sie "Mit KI-Wissen" als Wissensquelle
+2. Geben Sie Titel und Thema ein
+3. Konfigurieren Sie:
+   - Anzahl der Hauptkategorien
+   - Anzahl der Unterkategorien
+   - Anzahl der Lehrplanthemen
+4. Wählen Sie optional:
+   - Fachbereich
+   - Bildungsstufe
+   - Sonderregeln für Hauptkategorien
+5. Klicken Sie auf "Themenbaum generieren"
+
+#### Option B: Dokumentenbasiert
+1. Wählen Sie "Mit Dokumentenwissen" als Quelle
+2. Laden Sie relevante Dokumente hoch
+3. Konfigurieren Sie die Generierungseinstellungen
+4. Starten Sie die Generierung
+
+#### Option C: Manuelle Erstellung
+1. Wählen Sie "Manuelle Erstellung"
+2. Klicken Sie auf "Themenbaum erstellen"
+3. Fügen Sie Hauptthemen hinzu
+4. Erweitern Sie die Struktur nach Bedarf
+
+### 4. Themenbaum bearbeiten
+- Nutzen Sie den visuellen Editor
+- Bearbeiten Sie Knoten durch Anklicken
+- Ziehen Sie Knoten per Drag & Drop
+- Speichern Sie Änderungen
+
+### 5. Ansichten und Export
+- Wechseln Sie zwischen Ansichtsmodi
+- Exportieren Sie als:
+  - JSON (vollständige Daten)
+  - ASCII (Textdarstellung)
+  - Kategorielisten (bei Dokumentenanalyse)
+
+### 6. Evaluation
+- Wählen Sie den "Evaluation" Tab
+- Starten Sie die automatische Bewertung
+- Prüfen Sie die Verbesserungsvorschläge
+
+## 🔧 Technische Details
 
 ### Dokumentenverarbeitung
-- Effiziente PDF-Textextraktion
+- PDF-Textextraktion mit pdf.js
 - DOCX-Verarbeitung mit Mammoth.js
-- RTF- und TXT-Unterstützung
-- Automatische Textzerlegung
+- Automatische Textsegmentierung
 - Embedding-Generierung mit Transformers.js
 - Semantische Ähnlichkeitsanalyse
 - Automatische Sektorklassifizierung
 
-### Datenbankintegration
+### Datenbank-Integration
 - Supabase Backend
 - Echtzeit-Updates
 - Row Level Security
 - Volltextsuche
-- Dokumenten-Metadatenspeicherung
+- Dokumenten-Metadaten
 - Benutzerdatenisolierung
 
 ### UI/UX
 - Responsives Design
 - Ladezustände und Fortschrittsanzeigen
-- Fehlerbehandlung und Benutzerfeedback
+- Fehlerbehandlung
 - Intuitive Navigation
-- Moderne, aufgeräumte Oberfläche
+- Moderne Benutzeroberfläche
 - Tailwind CSS Styling
 
-## Voraussetzungen
+## 🤝 Mitwirken
 
-- Node.js 18 oder höher
-- npm 9 oder höher
-- Supabase-Konto
+1. Fork des Repositories erstellen
+2. Feature-Branch erstellen
+3. Änderungen committen
+4. Branch pushen
+5. Pull Request erstellen
 
-## Umgebungsvariablen
+## 📝 Lizenz
 
-Erstellen Sie eine `.env`-Datei im Hauptverzeichnis mit:
-
-```env
-VITE_SUPABASE_URL=ihre_supabase_url
-VITE_SUPABASE_ANON_KEY=ihr_supabase_anon_key
-```
-
-## Installation
-
-1. Repository klonen:
-```bash
-git clone [repository-url]
-cd themenbaum-generator
-```
-
-2. Abhängigkeiten installieren:
-```bash
-npm install
-```
-
-3. Entwicklungsserver starten:
-```bash
-npm run dev
-```
-
-## Projektstruktur
-
-```
-src/
-├── components/         # React-Komponenten
-│   ├── Auth.tsx       # Authentifizierung
-│   ├── DocumentUpload.tsx # Dokumentenverarbeitung
-│   ├── TopicForm.tsx  # Hauptformular
-│   └── TreeView.tsx   # Baumvisualisierung
-├── constants/         # Konstanten und Mappings
-│   ├── mappings.ts   # Bildungssektor-Mappings
-│   └── prompts.ts    # KI-Prompt-Templates
-├── types/            # TypeScript-Definitionen
-│   ├── TopicTree.ts  # Baumstruktur-Typen
-│   └── supabase.ts   # Datenbanktypen
-├── utils/            # Hilfsfunktionen
-│   ├── documentProcessor.ts # Dokumentenverarbeitung
-│   ├── openai.ts     # KI-Integration
-│   ├── supabase.ts   # Datenbank-Client
-│   └── treeUtils.ts  # Baummanipulation
-└── App.tsx           # Hauptanwendungskomponente
-```
-
-## Datenbankschema
-
-### Themenbäume
-```sql
-CREATE TABLE topic_trees (
-  id uuid PRIMARY KEY,
-  title text,
-  tree_data jsonb,
-  created_at timestamptz,
-  user_id uuid,
-  document_ids text[]
-);
-```
-
-### Dokumente
-```sql
-CREATE TABLE documents (
-  id uuid PRIMARY KEY,
-  title text,
-  content text,
-  file_type text,
-  created_at timestamptz,
-  user_id uuid,
-  metadata jsonb
-);
-```
-
-## Sicherheitsfunktionen
-
-- Row Level Security (RLS) aktiviert
-- Benutzerdatenisolierung
-- Sicherer Authentifizierungsablauf
-- Geschützte API-Endpunkte
-- Sichere Dokumentenverarbeitung
-- Eingabevalidierung
-- Fehlerbehandlung
-
-## Leistungsoptimierungen
-
-- Effiziente Dokumentenzerlegung
-- Optimierte Embedding-Generierung
-- Lazy Loading von Komponenten
-- Caching-Strategien
-- Minimierte API-Aufrufe
-- Effizientes Baumrendering
-
-## Lizenz
-
-MIT-Lizenz
-
-## Support
-
-Bei Fragen oder Problemen öffnen Sie bitte ein Issue im Repository.
+Apache 2.0

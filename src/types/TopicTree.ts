@@ -36,6 +36,7 @@ export interface TopicTree {
       education_sector: string;
       allgemeines_option: false | true | 'ai';
       methodik_option: false | true | 'ai';
+      subject_families_option: boolean;
     };
     description: string;
     target_audience: string;

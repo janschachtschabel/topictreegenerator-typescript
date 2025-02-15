@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Loader2, AlertCircle } from 'lucide-react';
-import { DISCIPLINE_MAPPING, EDUCATIONAL_CONTEXT_MAPPING, EDUCATION_SECTOR_MAPPING } from '../constants/mappings';
+import { Loader2 } from 'lucide-react';
 import { TopicTree } from '../types/TopicTree';
 import { generateStructuredText, createProperties, chunkDocumentContext } from '../utils/openai';
-import { MAIN_PROMPT_TEMPLATE, SUB_PROMPT_TEMPLATE, LP_PROMPT_TEMPLATE, DOCUMENT_ANALYSIS_PROMPT, SECTOR_SUMMARY_PROMPT } from '../constants/prompts';
 import { DocumentUpload } from './DocumentUpload';
 import { supabase } from '../utils/supabase';
-import { Trash2 } from 'lucide-react';
+import { MetadataForm } from './forms/MetadataForm';
+import { TopicSettingsForm } from './forms/TopicSettingsForm';
+import { KnowledgeSourceForm } from './forms/KnowledgeSourceForm';
+import { GenerationStatusForm } from './forms/GenerationStatusForm';
+import { DISCIPLINE_MAPPING, EDUCATIONAL_CONTEXT_MAPPING } from '../constants/mappings';
+import { MAIN_PROMPT_TEMPLATE, SUB_PROMPT_TEMPLATE, LP_PROMPT_TEMPLATE } from '../constants/prompts';
 
 interface TopicFormProps {
   onGenerate: (tree: TopicTree) => void;
@@ -18,12 +21,23 @@ interface TopicFormProps {
   baseUrl: string;
 }
 
-export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, apiKey, model, provider, baseUrl }: TopicFormProps) {
-  const [topic, setTopic] = useState('Physik');
+export default function TopicForm({ 
+  onGenerate, 
+  isGenerating, 
+  setIsGenerating, 
+  apiKey, 
+  model, 
+  provider, 
+  baseUrl 
+}: TopicFormProps) {
+  // Metadata state
   const [title, setTitle] = useState('');
   const [author, setAuthor] = useState('');
-  const [targetAudience, setTargetAudience] = useState('Lehrkräfte und Bildungseinrichtungen');
-  const [discipline, setDiscipline] = useState('Physik');
+  const [targetAudience, setTargetAudience] = useState('');
+  
+  // Topic settings state
+  const [topic, setTopic] = useState('');
+  const [discipline, setDiscipline] = useState('Keine Vorgabe');
   const [context, setContext] = useState('Keine Vorgabe');
   const [sector, setSector] = useState('Keine Vorgabe');
   const [numMain, setNumMain] = useState(10);
@@ -31,6 +45,9 @@ export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, a
   const [numLehrplan, setNumLehrplan] = useState(2);
   const [includeAllgemeines, setIncludeAllgemeines] = useState<false | true | 'ai'>(false);
   const [includeMethodik, setIncludeMethodik] = useState<false | true | 'ai'>(false);
+  const [useSubjectFamilies, setUseSubjectFamilies] = useState(false);
+  
+  // Generation state
   const [status, setStatus] = useState<string>('');
   const [currentPrompt, setCurrentPrompt] = useState(0);
   const [totalPrompts, setTotalPrompts] = useState(0);
@@ -39,25 +56,48 @@ export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, a
   const [showGenerateButton, setShowGenerateButton] = useState(false);
   const [knowledgeSource, setKnowledgeSource] = useState<'ai' | 'documents' | 'manual' | 'documents-sorted'>('ai');
   const [documentIds, setDocumentIds] = useState<string[]>([]);
-  const [showSettings, setShowSettings] = useState(false);
-
-  useEffect(() => {
-    const handleGenerationStatus = (event: CustomEvent) => {
-      setStatus(event.detail);
-    };
-
-    window.addEventListener('generationStatus', handleGenerationStatus as EventListener);
-    
-    return () => {
-      window.removeEventListener('generationStatus', handleGenerationStatus as EventListener);
-    };
-  }, []);
 
   const saveTree = async (tree: TopicTree) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Nicht angemeldet');
 
+      // First, check if a tree with this title already exists
+      const { data: existingTree, error: fetchError } = await supabase
+        .from('topic_trees')
+        .select('id, title')
+        .eq('user_id', user.id)
+        .eq('title', tree.metadata.title)
+        .single();
+
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 means no rows returned
+        throw fetchError;
+      }
+
+      if (existingTree) {
+        // Ask user if they want to update the existing tree
+        const shouldUpdate = window.confirm(
+          `Ein Themenbaum mit dem Titel "${tree.metadata.title}" existiert bereits. ` +
+          'Möchten Sie den bestehenden Themenbaum aktualisieren?'
+        );
+
+        if (!shouldUpdate) {
+          // Ask for a new title
+          const newTitle = window.prompt(
+            'Bitte geben Sie einen neuen Titel für den Themenbaum ein:',
+            `${tree.metadata.title} (Kopie)`
+          );
+
+          if (!newTitle) {
+            throw new Error('Speichern abgebrochen');
+          }
+
+          // Update the tree title
+          tree.metadata.title = newTitle.trim();
+        }
+      }
+
+      // Now save/update the tree
       const { error } = await supabase
         .from('topic_trees')
         .upsert({
@@ -70,15 +110,35 @@ export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, a
       if (error) throw error;
     } catch (error) {
       console.error('Error saving tree:', error);
+      if (error instanceof Error) {
+        throw new Error(
+          error.message === 'Speichern abgebrochen'
+            ? error.message
+            : 'Fehler beim Speichern des Themenbaums'
+        );
+      }
       throw new Error('Fehler beim Speichern des Themenbaums');
     }
   };
 
+  // Effect for generation status events
+  useEffect(() => {
+    const handleGenerationStatus = (event: CustomEvent) => {
+      setStatus(event.detail);
+    };
+
+    window.addEventListener('generationStatus', handleGenerationStatus as EventListener);
+    
+    return () => {
+      window.removeEventListener('generationStatus', handleGenerationStatus as EventListener);
+    };
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!title || !author) {
-      alert('Bitte füllen Sie Titel und Autor aus.');
+    if (!title) {
+      alert('Bitte geben Sie einen Titel ein.');
       return;
     }
     
@@ -316,7 +376,8 @@ export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, a
             educational_context: context,
             education_sector: sector,
             allgemeines_option: includeAllgemeines,
-            methodik_option: includeMethodik
+            methodik_option: includeMethodik,
+            subject_families_option: useSubjectFamilies
           },
           description: `Generierter Themenbaum für ${topic}`,
           target_audience: targetAudience,
@@ -340,332 +401,68 @@ export default function TopicForm({ onGenerate, isGenerating, setIsGenerating, a
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="space-y-4">
-        <div>
-          <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
-            Titel des Themenbaums
-          </label>
-          <input
-            type="text"
-            id="title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            placeholder="z.B. Physik Sekundarstufe II"
-            required
-          />
-        </div>
-        
-        <div>
-          <label htmlFor="author" className="block text-sm font-medium text-gray-700 mb-2">
-            Autor
-          </label>
-          <input
-            type="text"
-            id="author"
-            value={author}
-            onChange={(e) => setAuthor(e.target.value)}
-            className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            placeholder="Name des Autors"
-            required
-          />
-        </div>
-        
-        <div>
-          <label htmlFor="targetAudience" className="block text-sm font-medium text-gray-700 mb-2">
-            Zielgruppe
-          </label>
-          <input
-            type="text"
-            id="targetAudience"
-            value={targetAudience}
-            onChange={(e) => setTargetAudience(e.target.value)}
-            className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-            placeholder="z.B. Lehrkräfte und Bildungseinrichtungen"
-            required
-          />
-        </div>
-      </div>
+      <MetadataForm
+        title={title}
+        author={author}
+        targetAudience={targetAudience}
+        onTitleChange={setTitle}
+        onAuthorChange={setAuthor}
+        onTargetAudienceChange={setTargetAudience}
+      />
 
-      <div>
-        <label htmlFor="topic" className="block text-sm font-medium text-gray-700 mb-2">
-          Themenbaumthema
-        </label>
-        <textarea
-          id="topic"
-          value={topic}
-          onChange={(e) => setTopic(e.target.value)}
-          className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          rows={3}
-          required
-        />
-      </div>
-
-      <div className="grid grid-cols-3 gap-4">
-        <div>
-          <label htmlFor="numMain" className="block text-sm font-medium text-gray-700">
-            Hauptkategorien (1-30)
-          </label>
-          <input
-            type="number"
-            id="numMain"
-            value={numMain}
-            onChange={(e) => setNumMain(Number(e.target.value))}
-            min="1"
-            max="30"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          />
-        </div>
-        <div>
-          <label htmlFor="numSub" className="block text-sm font-medium text-gray-700">
-            Unterkategorien (0-30)
-          </label>
-          <input
-            type="number"
-            id="numSub"
-            value={numSub}
-            onChange={(e) => setNumSub(Number(e.target.value))}
-            min="0"
-            max="30"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          />
-        </div>
-        <div>
-          <label htmlFor="numLehrplan" className="block text-sm font-medium text-gray-700">
-            W. Unterkategorien (0-30)
-          </label>
-          <input
-            type="number"
-            id="numLehrplan"
-            value={numLehrplan}
-            onChange={(e) => setNumLehrplan(Number(e.target.value))}
-            min="0"
-            max="30"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="discipline" className="block text-sm font-medium text-gray-700 mb-2">
-            Fachbereich
-          </label>
-          <select
-            id="discipline"
-            value={discipline}
-            onChange={(e) => setDiscipline(e.target.value)}
-            className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          >
-            {Object.keys(DISCIPLINE_MAPPING).map((key) => (
-              <option key={key} value={key}>{key}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label htmlFor="context" className="block text-sm font-medium text-gray-700 mb-2">
-            Bildungsstufe
-          </label>
-          <select
-            id="context"
-            value={context}
-            onChange={(e) => setContext(e.target.value)}
-            className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          >
-            {Object.keys(EDUCATIONAL_CONTEXT_MAPPING).map((key) => (
-              <option key={key} value={key}>{key}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      <div>
-        <label htmlFor="sector" className="block text-sm font-medium text-gray-700 mb-2">
-          Bildungssektor
-        </label>
-        <select
-          id="sector"
-          value={sector}
-          onChange={(e) => setSector(e.target.value)}
-          className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-        >
-          {Object.keys(EDUCATION_SECTOR_MAPPING).map((key) => (
-            <option key={key} value={key}>{key}</option>
-          ))}
-        </select>
-      </div>
-
-      <div className="space-y-4">
-        <div className="relative">
-          <label htmlFor="allgemeines" className="block text-sm font-medium text-gray-700 mb-2">
-            Allgemeines
-            <span 
-              className="ml-2 inline-block text-gray-400 hover:text-gray-600 cursor-help"
-              title="Wählen Sie, wie die Kategorie 'Allgemeines' in den Themenbaum integriert werden soll"
-            >
-              ⓘ
-            </span>
-          </label>
-          <select
-            id="allgemeines"
-            value={includeAllgemeines ? (includeAllgemeines === 'ai' ? 'ai' : 'hardcoded') : 'none'}
-            onChange={(e) => {
-              const value = e.target.value;
-              setIncludeAllgemeines(value === 'none' ? false : value === 'ai' ? 'ai' : true);
-            }}
-            className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          >
-            <option value="none">
-              Nicht berücksichtigen
-            </option>
-            <option value="hardcoded">
-              Hardcodiert hinzufügen
-            </option>
-            <option value="ai">
-              KI-generiert
-            </option>
-          </select>
-        </div>
-
-        <div className="relative">
-          <label htmlFor="methodik" className="block text-sm font-medium text-gray-700 mb-2">
-            Methodik und Didaktik
-            <span 
-              className="ml-2 inline-block text-gray-400 hover:text-gray-600 cursor-help"
-              title="Wählen Sie, wie die Kategorie 'Methodik und Didaktik' in den Themenbaum integriert werden soll"
-            >
-              ⓘ
-            </span>
-          </label>
-          <select
-            id="methodik"
-            value={includeMethodik ? (includeMethodik === 'ai' ? 'ai' : 'hardcoded') : 'none'}
-            onChange={(e) => {
-              const value = e.target.value;
-              setIncludeMethodik(value === 'none' ? false : value === 'ai' ? 'ai' : true);
-            }}
-            className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          >
-            <option value="none">
-              Nicht berücksichtigen
-            </option>
-            <option value="hardcoded">
-              Hardcodiert hinzufügen
-            </option>
-            <option value="ai">
-              KI-generiert
-            </option>
-          </select>
-        </div>
-      </div>
+      <TopicSettingsForm
+        topic={topic}
+        discipline={discipline}
+        context={context}
+        sector={sector}
+        numMain={numMain}
+        numSub={numSub}
+        numLehrplan={numLehrplan}
+        includeAllgemeines={includeAllgemeines}
+        includeMethodik={includeMethodik}
+        useSubjectFamilies={useSubjectFamilies}
+        onTopicChange={setTopic}
+        onDisciplineChange={setDiscipline}
+        onContextChange={setContext}
+        onSectorChange={setSector}
+        onNumMainChange={setNumMain}
+        onNumSubChange={setNumSub}
+        onNumLehrplanChange={setNumLehrplan}
+        onIncludeAllgemeinesChange={setIncludeAllgemeines}
+        onIncludeMethodikChange={setIncludeMethodik}
+        onUseSubjectFamiliesChange={setUseSubjectFamilies}
+      />
 
       <div className="grid grid-cols-1 gap-6">
-        <div>
-          <div>
-            <h3 className="text-sm font-medium text-gray-700 mb-4">Wissensquelle</h3>
-            <div className="bg-gray-50 p-4 rounded-lg space-y-3">
-              <label className="flex items-center p-2 rounded hover:bg-gray-100 transition-colors">
-                <input
-                  type="radio"
-                  checked={knowledgeSource === 'ai'}
-                  onChange={() => {
-                    setKnowledgeSource('ai');
-                    setCanGenerate(true);
-                    setShowGenerateButton(true);
-                  }}
-                  className="rounded-full border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <div className="ml-2">
-                  <span className="text-sm font-medium text-gray-700">Mit KI-Wissen</span>
-                  <div className="w-2 h-2 inline-block ml-2 rounded-full bg-blue-100"></div>
-                </div>
-              </label>
-              <label className="flex items-center p-2 rounded hover:bg-gray-100 transition-colors">
-                <input
-                  type="radio"
-                  checked={knowledgeSource === 'manual'}
-                  onChange={() => {
-                    setKnowledgeSource('manual');
-                    setCanGenerate(true);
-                    setShowGenerateButton(true);
-                  }}
-                  className="rounded-full border-gray-300 text-orange-600 focus:ring-orange-500"
-                />
-                <div className="ml-2">
-                  <span className="text-sm font-medium text-gray-700">Manuelle Erstellung</span>
-                  <div className="w-2 h-2 inline-block ml-2 rounded-full bg-orange-100"></div>
-                </div>
-              </label>
-              <label className="flex items-center p-2 rounded hover:bg-gray-100 transition-colors">
-                <input
-                  type="radio"
-                  checked={knowledgeSource === 'documents'}
-                  onChange={() => {
-                    setKnowledgeSource('documents');
-                    setCanGenerate(documentContexts.length > 0);
-                    setShowGenerateButton(documentContexts.length > 0);
-                  }}
-                  className="rounded-full border-gray-300 text-green-600 focus:ring-green-500"
-                />
-                <div className="ml-2">
-                  <span className="text-sm font-medium text-gray-700">Mit Dokumentenwissen</span>
-                  <div className="w-2 h-2 inline-block ml-2 rounded-full bg-green-100"></div>
-                </div>
-              </label>
-              <label className="flex items-center p-2 rounded hover:bg-gray-100 transition-colors">
-                <input
-                  type="radio"
-                  checked={knowledgeSource === 'documents-sorted'}
-                  onChange={() => {
-                    setKnowledgeSource('documents-sorted');
-                    setCanGenerate(documentContexts.length > 0);
-                    setShowGenerateButton(documentContexts.length > 0);
-                  }}
-                  className="rounded-full border-gray-300 text-purple-600 focus:ring-purple-500"
-                />
-                <div className="ml-2">
-                  <span className="text-sm font-medium text-gray-700">Mit Dokumentenwissen (HK mit Listensortierung)</span>
-                  <div className="w-2 h-2 inline-block ml-2 rounded-full bg-purple-100"></div>
-                </div>
-              </label>
-            </div>
-          </div>
+        <KnowledgeSourceForm
+          knowledgeSource={knowledgeSource}
+          onKnowledgeSourceChange={setKnowledgeSource}
+          onCanGenerateChange={setCanGenerate}
+          onShowGenerateButtonChange={setShowGenerateButton}
+          documentContexts={documentContexts}
+        />
 
-          {(knowledgeSource === 'documents' || knowledgeSource === 'documents-sorted') && (
-            <div className="mt-6">
-              <h3 className="text-sm font-medium text-gray-700 mb-4">Dokumente für Kontext</h3>
-              <DocumentUpload 
-                onDocumentsProcessed={(contexts) => {
-                  setDocumentContexts(contexts);
-                  setShowGenerateButton(contexts.length > 0);
-                  setCanGenerate(contexts.length > 0);
-                }}
-                onDocumentIdsUpdate={(ids) => setDocumentIds(ids)}
-              />
-            </div>
-          )}
-        </div>
-      </div>
-
-      {isGenerating && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600">{status}</span>
-            <span className="text-sm text-gray-600">
-              {currentPrompt} von {totalPrompts} Prompts
-            </span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div
-              className="bg-indigo-600 rounded-full h-2 transition-all duration-300"
-              style={{
-                width: `${totalPrompts > 0 ? (currentPrompt / totalPrompts) * 100 : 0}%`
+        {(knowledgeSource === 'documents' || knowledgeSource === 'documents-sorted') && (
+          <div className="mt-6">
+            <h3 className="text-sm font-medium text-gray-700 mb-4">Dokumente für Kontext</h3>
+            <DocumentUpload 
+              onDocumentsProcessed={(contexts) => {
+                setDocumentContexts(contexts);
+                setShowGenerateButton(contexts.length > 0);
+                setCanGenerate(contexts.length > 0);
               }}
+              onDocumentIdsUpdate={(ids) => setDocumentIds(ids)}
             />
           </div>
-        </div>
-      )}
+        )}
+      </div>
+
+      <GenerationStatusForm
+        isGenerating={isGenerating}
+        status={status}
+        currentPrompt={currentPrompt}
+        totalPrompts={totalPrompts}
+      />
 
       <div className="flex justify-end">
         <button

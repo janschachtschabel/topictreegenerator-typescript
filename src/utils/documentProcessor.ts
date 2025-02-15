@@ -336,7 +336,7 @@ export async function processDocument(file: File): Promise<string> {
     await getEmbeddingPipeline();
     
     // Find most relevant chunks for initial display
-    const relevantChunks = await findRelevantChunks(chunks, queryContext, 100);
+    const relevantChunks = await findRelevantChunks(chunks, queryContext, 50);
     
     // Store document in Supabase with both full text and chunks
     const { error: insertError } = await supabase
