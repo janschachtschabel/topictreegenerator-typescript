@@ -162,12 +162,16 @@ function TreeNode({ node, level, selectedSector, onUpdate, onDelete, onAdd }: Tr
   };
 
   const handleAddChild = () => {
+    if (!node.subcollections) {
+      node.subcollections = [];
+    }
+
     const newNode: Collection = {
       title: "Neues Thema",
-      shorttitle: "NT",
+      shorttitle: `NT${node.subcollections.length + 1}`,
       properties: createProperties(
         "Neues Thema",
-        "NT",
+        `NT${node.subcollections.length + 1}`,
         {
           grundbildend: "Neues Thema",
           allgemeinbildend: "Neues Thema",
@@ -179,10 +183,6 @@ function TreeNode({ node, level, selectedSector, onUpdate, onDelete, onAdd }: Tr
       ),
       subcollections: []
     };
-    
-    if (!node.subcollections) {
-      node.subcollections = [];
-    }
     
     node.subcollections.push(newNode);
     onUpdate({...node});
@@ -295,39 +295,41 @@ type ViewMode = 'tree' | 'ascii' | 'comparison' | 'interconnected';
 export default function TreeView({ tree, onUpdate }: TreeViewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('tree');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [selectedSector, setSelectedSector] = useState('allgemeinbildend');
+  const [currentTreeId, setCurrentTreeId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   // Filter tree based on selected sector
   const filteredTree = tree ? filterTreeBySector(tree, selectedSector) : null;
-  
-  const createNewTree = () => {
-    const newTree: TopicTree = {
-      collection: [],
-      metadata: {
-        title: "Neuer Themenbaum",
-        theme: "",
-        generation_settings: {
-          num_main: 0,
-          num_sub: 0,
-          num_lehrplan: 0,
-          discipline: "Keine Vorgabe",
-          educational_context: "Keine Vorgabe",
-          education_sector: "allgemeinbildend",
-          allgemeines_option: false,
-          methodik_option: false
+
+  const handleAddMainTopic = () => {
+    if (!tree) return;
+    
+    const newNode: Collection = {
+      title: "Neues Hauptthema",
+      shorttitle: `HT${tree.collection.length + 1}`,
+      properties: createProperties(
+        "Neues Hauptthema",
+        `HT${tree.collection.length + 1}`,
+        {
+          grundbildend: "Neues Hauptthema",
+          allgemeinbildend: "Neues Hauptthema",
+          berufsbildend: "Neues Hauptthema",
+          akademisch: "Neues Hauptthema"
         },
-        description: "Manuell erstellter Themenbaum",
-        target_audience: "Lehrkräfte und Bildungseinrichtungen",
-        created_at: new Date().toISOString(),
-        version: "1.0",
-        author: ""
-      }
+        "Beschreibung des neuen Hauptthemas",
+        ["neu", "hauptthema"]
+      ),
+      subcollections: []
     };
-    onUpdate(newTree);
-    setIsCreatingNew(true);
-    setHasUnsavedChanges(true);
+    
+    if (!tree.collection) {
+      tree.collection = [];
+    }
+    
+    tree.collection.push(newNode);
+    onUpdate({...tree});
+    void handleTreeUpdate(tree);
   };
 
   const handleDownload = () => {
@@ -354,34 +356,6 @@ export default function TreeView({ tree, onUpdate }: TreeViewProps) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  };
-
-  const handleAddMainTopic = () => {
-    const newNode: Collection = {
-      title: "Neues Hauptthema",
-      shorttitle: "NHT",
-      properties: createProperties(
-        "Neues Hauptthema",
-        "NHT",
-        {
-          grundbildend: "Neues Hauptthema",
-          allgemeinbildend: "Neues Hauptthema",
-          berufsbildend: "Neues Hauptthema",
-          akademisch: "Neues Hauptthema"
-        },
-        "Beschreibung des neuen Hauptthemas",
-        ["neu", "hauptthema"]
-      ),
-      subcollections: []
-    };
-    
-    if (!tree.collection) {
-      tree.collection = [];
-    }
-    
-    tree.collection.push(newNode);
-    onUpdate({...tree});
-    setHasUnsavedChanges(true);
   };
 
   const handleDownloadCategoryLists = () => {
@@ -421,12 +395,9 @@ export default function TreeView({ tree, onUpdate }: TreeViewProps) {
   const handleTreeUpdate = async (updatedTree: TopicTree) => {
     setIsSaving(true);
     try {
-      // Update tree through parent component
+      // Update through parent component which handles DB operations
       onUpdate(updatedTree);
       setHasUnsavedChanges(false);
-
-      // Refresh trees list
-      window.dispatchEvent(new CustomEvent('refreshTrees'));
     } catch (error) {
       console.error('Error updating tree:', error);
       alert('Fehler beim Speichern des Themenbaums. Bitte versuchen Sie es erneut.');
@@ -440,17 +411,8 @@ export default function TreeView({ tree, onUpdate }: TreeViewProps) {
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center space-x-4">
           <h2 className="text-lg font-semibold">
-            {isCreatingNew ? "Manuell erstellter Themenbaum" : "Themenbaum Vorschau"}
+            Themenbaum Vorschau
           </h2>
-          {!tree && !isCreatingNew && (
-            <button
-              onClick={createNewTree}
-              className="flex items-center px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
-            >
-              <FileText className="w-4 h-4 mr-2" />
-              Neuen Themenbaum erstellen
-            </button>
-          )}
         </div>
         <div className="flex space-x-2">
           <button
@@ -592,7 +554,7 @@ export default function TreeView({ tree, onUpdate }: TreeViewProps) {
           </div>
         </div>
         )}
-        {(tree || isCreatingNew) && (
+        {tree && (
           <button
             onClick={handleAddMainTopic}
             className="flex items-center px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
@@ -603,7 +565,7 @@ export default function TreeView({ tree, onUpdate }: TreeViewProps) {
         )}
       </div>
 
-      {tree || isCreatingNew ? (viewMode === 'ascii' ? (
+      {tree ? (viewMode === 'ascii' ? (
         <pre className="bg-gray-50 p-4 rounded-lg overflow-x-auto font-mono text-sm">
           {filteredTree ? generateAsciiTree(filteredTree, selectedSector) : ''}
         </pre>
@@ -648,19 +610,19 @@ export default function TreeView({ tree, onUpdate }: TreeViewProps) {
               onUpdate={(updatedNode) => {
                 const updatedCollection = [...tree.collection];
                 updatedCollection[index] = updatedNode;
-                onUpdate({
+                const updatedTree = {
                   ...tree,
                   collection: updatedCollection
-                });
-                setHasUnsavedChanges(true);
+                };
+                void handleTreeUpdate(updatedTree);
               }}
               onDelete={() => {
                 const updatedCollection = tree.collection.filter((_, i) => i !== index);
-                onUpdate({
+                const updatedTree = {
                   ...tree,
                   collection: updatedCollection
-                });
-                setHasUnsavedChanges(true);
+                };
+                void handleTreeUpdate(updatedTree);
               }}
               onAdd={() => {}}
             />
@@ -669,7 +631,7 @@ export default function TreeView({ tree, onUpdate }: TreeViewProps) {
       )) : (
         <div className="text-center py-12 bg-gray-50 rounded-lg">
           <p className="text-gray-500">
-            {isCreatingNew ? "Fügen Sie Hauptthemen hinzu, um Ihren Themenbaum zu erstellen" : "Hier erscheint Ihr generierter Themenbaum"}
+            Hier erscheint Ihr generierter Themenbaum
           </p>
         </div>
       )}

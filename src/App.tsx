@@ -2,15 +2,16 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { pipeline, env, type Pipeline, type PipelineType } from '@xenova/transformers';
 import { supabase } from './utils/supabase';
 import { useState, useEffect, ReactNode } from 'react';
-import { Loader2, Trash2, LogOut, Settings, FileText, Eye, Star } from 'lucide-react';
+import { Loader2, Trash2, LogOut, Settings, FileText, Eye, Star, MessageSquare } from 'lucide-react';
 import { Auth } from './components/Auth';
 import TopicForm from './components/TopicForm';
 import TreeView from './components/TreeView';
 import EvaluationView from './components/EvaluationView';
+import DocumentChat from './components/DocumentChat';
 import type { TopicTree, Collection } from './types/TopicTree';
 import { LLMProvider, LLM_PROVIDERS, getDefaultProvider, getDefaultModel } from './types/LLMProvider';
 
-type View = 'generate' | 'preview' | 'evaluate';
+type View = 'generate' | 'preview' | 'evaluate' | 'chat';
 
 interface TabProps {
   icon: ReactNode;
@@ -370,78 +371,101 @@ export default function App() {
   const handleTreeUpdate = async (updatedTree: TopicTree) => {
     setIsSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Nicht angemeldet');
-
-      // First check if a tree with this title already exists
-      const { data: existingTree, error: fetchError } = await supabase
-        .from('topic_trees')
-        .select('id, title')
-        .eq('user_id', user.id)
-        .eq('title', updatedTree.metadata.title)
-        .single();
-
-      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 means no rows returned
-        throw fetchError;
+      // Get current user
+      const userResponse = await supabase.auth.getUser();
+      if (!userResponse.data.user) {
+        throw new Error('Nicht angemeldet');
       }
+      const user = userResponse.data.user;
 
-      if (existingTree) {
-        // Ask user if they want to update the existing tree
-        const shouldUpdate = window.confirm(
-          `Ein Themenbaum mit dem Titel "${updatedTree.metadata.title}" existiert bereits. ` +
-          'Möchten Sie den bestehenden Themenbaum aktualisieren?'
-        );
+      let treeId = currentTreeId;
+      let shouldInsert = !treeId;
 
-        if (!shouldUpdate) {
-          // Ask for a new title
-          const newTitle = window.prompt(
-            'Bitte geben Sie einen neuen Titel für den Themenbaum ein:',
-            `${updatedTree.metadata.title} (Kopie)`
-          );
+      if (treeId) {
+        // Verify tree exists and belongs to user
+        const { data: existingTree, error: fetchError } = await supabase
+          .from('topic_trees')
+          .select('id')
+          .eq('id', treeId)
+          .eq('user_id', user.id)
+          .single();
 
-          if (!newTitle) {
-            throw new Error('Speichern abgebrochen');
+        if (fetchError) {
+          if (fetchError.code === 'PGRST116') { // No rows returned
+            shouldInsert = true;
+          } else {
+            throw fetchError;
           }
-
-          // Update the tree title
-          updatedTree.metadata.title = newTitle.trim();
         }
       }
 
-      // Now save/update the tree
-      const { error } = await supabase
-        .from('topic_trees')
-        .upsert({
-          tree_data: updatedTree,
-          title: updatedTree.metadata.title,
-          user_id: user.id
-        });
+      if (shouldInsert) {
+        // Create new tree
+        const { data: newTree, error: insertError } = await supabase
+          .from('topic_trees')
+          .insert({
+            tree_data: updatedTree,
+            title: updatedTree.metadata.title,
+            user_id: user.id
+          })
+          .select('id')
+          .single();
 
-      if (error) throw error;
+        if (insertError) throw new Error('Fehler beim Erstellen des Themenbaums');
+        if (!newTree) throw new Error('Fehler beim Speichern des Themenbaums');
+        
+        treeId = newTree.id;
+        setCurrentTreeId(treeId);
+      } else {
+        // Update existing tree
+        const { error: updateError } = await supabase
+          .from('topic_trees')
+          .update({
+            tree_data: updatedTree,
+            title: updatedTree.metadata.title
+          })
+          .eq('id', treeId)
+          .eq('user_id', user.id); // Ensure user owns the tree
 
+        if (updateError) throw updateError;
+      }
+
+      // Update local state
       setTree(updatedTree);
+      
+      // Refresh tree list
       void loadSavedTrees();
     } catch (error) {
       console.error('Error updating tree:', error);
-      if (error instanceof Error) {
-        alert(
-          error.message === 'Speichern abgebrochen'
-            ? error.message
-            : 'Fehler beim Speichern des Themenbaums'
-        );
-      } else {
-        alert('Fehler beim Speichern des Themenbaums');
-      }
-      throw error;
+      alert('Fehler beim Speichern des Themenbaums. Bitte versuchen Sie es erneut.');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleTreeGenerated = async (newTree: TopicTree, treeId: string) => {
+  const handleTreeGenerated = async (newTree: TopicTree) => {
     setTree(newTree);
-    setCurrentTreeId(treeId);
+    setCurrentView('preview');
     void loadSavedTrees();
+    
+    // Load the newly generated tree to ensure it's properly initialized
+    try {
+      const { data: trees } = await supabase
+        .from('topic_trees')
+        .select('id')
+        .eq('title', newTree.metadata.title)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (trees && trees.length > 0) {
+        const treeId = trees[0].id;
+        setCurrentTreeId(treeId);
+        await loadTree(treeId);
+      }
+    } catch (error) {
+      console.error('Error loading new tree:', error);
+    }
   };
 
   if (!user) {
@@ -474,6 +498,12 @@ export default function App() {
                 label="Evaluation"
                 isActive={currentView === 'evaluate'}
                 onClick={() => setCurrentView('evaluate')}
+              />
+              <Tab
+                icon={<MessageSquare className="w-4 h-4" />}
+                label="Dokument-Chat"
+                isActive={currentView === 'chat'}
+                onClick={() => setCurrentView('chat')}
               />
             </div>
             <button
@@ -603,6 +633,12 @@ export default function App() {
           <div className="bg-white rounded-lg shadow-lg p-6">
             <EvaluationView tree={tree} />
           </div>
+        </div>
+      )}
+      
+      {currentView === 'chat' && (
+        <div className="container mx-auto px-4 py-8">
+          <DocumentChat />
         </div>
       )}
 

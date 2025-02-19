@@ -56,58 +56,70 @@ export default function TopicForm({
   const [showGenerateButton, setShowGenerateButton] = useState(false);
   const [knowledgeSource, setKnowledgeSource] = useState<'ai' | 'documents' | 'manual' | 'documents-sorted'>('ai');
   const [documentIds, setDocumentIds] = useState<string[]>([]);
+  const [titleError, setTitleError] = useState<string | null>(null);
+  const [isCheckingTitle, setIsCheckingTitle] = useState(false);
+
+  // Check title uniqueness when title changes
+  useEffect(() => {
+    const checkTitleUniqueness = async () => {
+      if (!title.trim()) {
+        setTitleError(null);
+        return;
+      }
+
+      setIsCheckingTitle(true);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data: existingTrees, error } = await supabase
+          .from('topic_trees')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('title', title.trim())
+          .limit(1);
+
+        if (error) throw error;
+
+        setTitleError(existingTrees?.length > 0 
+          ? 'Ein Themenbaum mit diesem Titel existiert bereits' 
+          : null);
+      } catch (error) {
+        console.error('Error checking title:', error);
+      } finally {
+        setIsCheckingTitle(false);
+      }
+    };
+
+    const debounceTimer = setTimeout(() => {
+      void checkTitleUniqueness();
+    }, 500);
+
+    return () => clearTimeout(debounceTimer);
+  }, [title]);
 
   const saveTree = async (tree: TopicTree) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Nicht angemeldet');
 
-      // First, check if a tree with this title already exists
-      const { data: existingTree, error: fetchError } = await supabase
+      // Save tree
+      const { data, error } = await supabase
         .from('topic_trees')
-        .select('id, title')
-        .eq('user_id', user.id)
-        .eq('title', tree.metadata.title)
-        .single();
-
-      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 means no rows returned
-        throw fetchError;
-      }
-
-      if (existingTree) {
-        // Ask user if they want to update the existing tree
-        const shouldUpdate = window.confirm(
-          `Ein Themenbaum mit dem Titel "${tree.metadata.title}" existiert bereits. ` +
-          'Möchten Sie den bestehenden Themenbaum aktualisieren?'
-        );
-
-        if (!shouldUpdate) {
-          // Ask for a new title
-          const newTitle = window.prompt(
-            'Bitte geben Sie einen neuen Titel für den Themenbaum ein:',
-            `${tree.metadata.title} (Kopie)`
-          );
-
-          if (!newTitle) {
-            throw new Error('Speichern abgebrochen');
-          }
-
-          // Update the tree title
-          tree.metadata.title = newTitle.trim();
-        }
-      }
-
-      // Now save/update the tree
-      const { error } = await supabase
-        .from('topic_trees')
-        .upsert({
+        .insert({
           tree_data: tree,
           title: tree.metadata.title,
           user_id: user.id,
           document_ids: documentIds
-        });
+        })
+        .select('id')
+        .single();
 
       if (error) throw error;
+      if (!data) throw new Error('Fehler beim Speichern des Themenbaums');
+
+      return { ...tree, id: data.id };
+
     } catch (error) {
       console.error('Error saving tree:', error);
       if (error instanceof Error) {
@@ -115,7 +127,7 @@ export default function TopicForm({
           error.message === 'Speichern abgebrochen'
             ? error.message
             : 'Fehler beim Speichern des Themenbaums'
-        );
+        ); 
       }
       throw new Error('Fehler beim Speichern des Themenbaums');
     }
@@ -137,8 +149,13 @@ export default function TopicForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!title) {
+    if (!title.trim()) {
       alert('Bitte geben Sie einen Titel ein.');
+      return;
+    }
+
+    if (titleError) {
+      alert('Bitte wählen Sie einen eindeutigen Titel für den Themenbaum.');
       return;
     }
     
@@ -146,7 +163,7 @@ export default function TopicForm({
     setCurrentPrompt(0);
     setTotalPrompts(0);
     setStatus('Initialisiere...');
-
+    
     try {
       if (knowledgeSource === 'manual') {
         const tree: TopicTree = {
@@ -189,9 +206,11 @@ export default function TopicForm({
             author: author
           }
         };
-        
-        await saveTree(tree);
-        onGenerate(tree);
+
+        const savedTree = await saveTree(tree);
+        const treeId = savedTree.id;
+        onGenerate(savedTree, treeId);
+        setIsGenerating(false);
         return;
       }
 
@@ -316,7 +335,7 @@ export default function TopicForm({
         };
       }));
 
-      // Add hardcoded categories if selected
+      // Add hardcoded categories if selected 
       let finalCollection = [...collection];
       
       if (includeAllgemeines === true) {
@@ -387,9 +406,10 @@ export default function TopicForm({
         }
       };
 
-      await saveTree(tree);
+      const savedTree = await saveTree(tree);
+      const treeId = savedTree.id;
       setStatus('Themenbaum erfolgreich generiert!');
-      onGenerate(tree);
+      onGenerate(savedTree);
     } catch (error) {
       console.error('Error generating tree:', error);
       setStatus(`Fehler: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`);
@@ -408,6 +428,8 @@ export default function TopicForm({
         onTitleChange={setTitle}
         onAuthorChange={setAuthor}
         onTargetAudienceChange={setTargetAudience}
+        titleError={titleError}
+        isCheckingTitle={isCheckingTitle}
       />
 
       <TopicSettingsForm
@@ -467,7 +489,7 @@ export default function TopicForm({
       <div className="flex justify-end">
         <button
           type="submit"
-          disabled={isGenerating || !title || !author || (knowledgeSource === 'documents' && documentContexts.length === 0)}
+          disabled={isGenerating || !title || titleError || isCheckingTitle || !author || (knowledgeSource === 'documents' && documentContexts.length === 0)}
           className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isGenerating ? (

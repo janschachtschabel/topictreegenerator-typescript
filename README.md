@@ -5,7 +5,7 @@ Ein leistungsstarkes Webtool zur Generierung und Verwaltung von hierarchischen T
 ## 🌟 Hauptfunktionen
 
 ### 🤖 KI-gestützte Themengenerierung
-- **Mehrere KI-Modelle**: Unterstützung für GPT-4o-mini, GPT-4o, O3-mini
+- **Mehrere KI-Modelle**: Unterstützung für GPT-4o-mini, GPT-4o
 - **Flexible Konfiguration**: Einstellbare Anzahl von Haupt-, Unter- und Lehrplanthemen
 - **Intelligente Hierarchie**: Automatische Generierung sinnvoller Themenstrukturen
 - **Kontextbewusste Vorschläge**: Berücksichtigung des Bildungskontexts
@@ -22,6 +22,11 @@ Ein leistungsstarkes Webtool zur Generierung und Verwaltung von hierarchischen T
   - Embedding-basierte Relevanzanalyse
   - Automatische Dokumentenkategorisierung
   - Sektorspezifische Inhaltsanalyse
+- **Interaktiver Dokument-Chat**:
+  - Kontextbewusste Fragen und Antworten
+  - Markdown-formatierte Antworten
+  - Echtzeit-Dokumentenvorschau
+  - Nahtlose Integration mit Dokumentenverwaltung
 
 ### 🔄 Wissensquellen
 1. **Reines KI-Wissen**: Generierung basierend auf KI-Modellen
@@ -51,6 +56,7 @@ Ein leistungsstarkes Webtool zur Generierung und Verwaltung von hierarchischen T
 - **ASCII-Ansicht**: Textbasierte Baumvisualisierung
 - **Sektorvergleich**: Parallele Ansicht verschiedener Sektoren
 - **Verbindungsansicht**: Interaktive Visualisierung der Beziehungen
+- **Dokument-Chat**: Interaktiver Chat für Dokumentenanalyse
 
 ### 📊 Evaluierung
 - Automatische Qualitätsbewertung
@@ -124,6 +130,7 @@ npm run dev
 2. Laden Sie relevante Dokumente hoch
 3. Konfigurieren Sie die Generierungseinstellungen
 4. Starten Sie die Generierung
+5. Optional: Nutzen Sie den Dokument-Chat für detaillierte Analysen
 
 #### Option C: Manuelle Erstellung
 1. Wählen Sie "Manuelle Erstellung"
@@ -149,6 +156,13 @@ npm run dev
 - Starten Sie die automatische Bewertung
 - Prüfen Sie die Verbesserungsvorschläge
 
+### 7. Dokument-Chat
+- Wählen Sie den "Dokument-Chat" Tab
+- Laden Sie Dokumente hoch oder wählen Sie vorhandene aus
+- Stellen Sie Fragen zum Dokumenteninhalt
+- Erhalten Sie KI-gestützte Antworten mit Markdown-Formatierung
+- Wechseln Sie zwischen allgemeinem Chat und dokumentspezifischen Fragen
+
 ## 🔧 Technische Details
 
 ### Dokumentenverarbeitung
@@ -166,6 +180,7 @@ npm run dev
 - Volltextsuche
 - Dokumenten-Metadaten
 - Benutzerdatenisolierung
+- Dokumenten-Chat Integration
 
 ### UI/UX
 - Responsives Design
@@ -185,4 +200,11 @@ npm run dev
 
 ## 📝 Lizenz
 
-Apache 2.0
+MIT Lizenz
+
+## 💬 Support
+
+Bei Fragen oder Problemen:
+1. Öffnen Sie ein Issue im Repository
+2. Kontaktieren Sie das Entwicklungsteam
+3. Prüfen Sie die [Dokumentation](https://visionary-mandazi-1f971b.netlify.app)

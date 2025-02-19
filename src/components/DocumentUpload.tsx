@@ -19,18 +19,19 @@ export function DocumentUpload({ onDocumentsProcessed, onDocumentIdsUpdate }: Do
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [processingStatus, setProcessingStatus] = useState('');
   const [overallProgress, setOverallProgress] = useState<number>(0);
   const [documentIds, setDocumentIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Initialize document processing state
+  // Load documents on mount
   useEffect(() => {
     setIsProcessing(false);
     setProcessingStatus('');
     setOverallProgress(0);
-    loadUserDocuments();
-  }, []);
+    void loadUserDocuments();
+  }, []); 
 
   const loadUserDocuments = async () => {
     setIsLoading(true);
@@ -135,6 +136,7 @@ export function DocumentUpload({ onDocumentsProcessed, onDocumentIdsUpdate }: Do
     let processedFiles = 0;
 
     try {
+      setIsUploading(true);
       const contexts: string[] = [];
       
       for (const fileObj of newFiles) {
@@ -151,6 +153,28 @@ export function DocumentUpload({ onDocumentsProcessed, onDocumentIdsUpdate }: Do
           processedFiles++;
           setOverallProgress((processedFiles / totalFiles) * 100);
           
+          // Store document in Supabase
+          const { data: savedDoc, error: saveError } = await supabase
+            .from('documents')
+            .insert({
+              title: fileObj.file.name,
+              content: context,
+              file_type: fileObj.file.type,
+              user_id: user.id,
+              metadata: {
+                original_size: fileObj.file.size,
+                processing_date: new Date().toISOString(),
+                chunks: context.split('\n\n'),
+                relevantChunks: context.split('\n\n').slice(0, 50)
+              }
+            })
+            .select('id')
+            .single();
+
+          if (saveError) {
+            throw new Error('Fehler beim Speichern des Dokuments');
+          }
+
           // Store the context with the file
           setUploadedFiles(prev => prev.map((f, i) => 
             i === index ? { ...f, status: 'done', context } : f
@@ -164,8 +188,10 @@ export function DocumentUpload({ onDocumentsProcessed, onDocumentIdsUpdate }: Do
 
       onDocumentsProcessed(contexts);
       setProcessingStatus('Alle Dokumente verarbeitet');
+      await loadUserDocuments(); // Reload documents after processing
     } finally {
       setIsProcessing(false);
+      setIsUploading(false);
       setOverallProgress(0);
     }
   };
