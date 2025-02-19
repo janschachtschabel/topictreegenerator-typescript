@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from 'react';
 import { Send, Loader2, MessageSquare, Upload, Plus, AlertCircle } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { DocumentUpload } from './DocumentUpload';
-import ReactMarkdown from 'react-markdown';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -21,22 +20,18 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
     id: string;
     title: string;
     content: string;
-    metadata?: {
-      chunks?: string[];
-      relevantChunks?: string[];
-    };
+    chunks?: string[];
   }>>([]);
   const [selectedDocument, setSelectedDocument] = useState<string | undefined>(undefined);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [showUpload, setShowUpload] = useState(false);
-  const [chatMode, setChatMode] = useState<'document' | 'general'>('general');
+  const [chatMode, setChatMode] = useState<'document' | 'all' | 'general'>('document');
   const [error, setError] = useState<string | null>(null);
   const [isLoadingDocuments, setIsLoadingDocuments] = useState(false);
 
-  // Load documents on mount and when documents are updated
   useEffect(() => {
     void loadDocuments();
-  }, [showUpload]); // Reload when upload modal closes
+  }, []);
 
   useEffect(() => {
     scrollToBottom();
@@ -57,15 +52,14 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
       const { data, error } = await supabase
         .from('documents')
         .select('id, title, content, metadata')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+        .eq('user_id', user.id);
 
       if (error) throw error;
       setDocuments((data || []).map(doc => ({
         id: doc.id,
         title: doc.title,
         content: doc.content,
-        metadata: doc.metadata
+        chunks: doc.metadata?.chunks || []
       })));
 
     } catch (error) {
@@ -91,19 +85,22 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
       let documentContent = '';
       if (chatMode === 'document') {
         const document = documents.find(doc => doc.id === selectedDocument);
-        if (!document) {
-          throw new Error('Dokument nicht gefunden');
-        }
-
-        // Use relevant chunks if available, otherwise use first 50 chunks
-        if (document?.metadata?.relevantChunks?.length) {
-          documentContent = document.metadata.relevantChunks.join('\n\n');
-        } else if (document?.metadata?.chunks?.length) {
-          documentContent = document.metadata.chunks.slice(0, 50).join('\n\n');
+        // Use chunks if available, otherwise use full content
+        if (document?.chunks?.length) {
+          documentContent = document.chunks.slice(0, 50).join('\n\n');
         } else {
-          // Fallback to first 5000 chars if no chunks available
-          documentContent = (document?.content || '').slice(0, 5000);
+          documentContent = document?.content || '';
         }
+      } else if (chatMode === 'all') {
+        // For all documents, take first 10 chunks from each document
+        documentContent = documents
+          .map(doc => {
+            if (doc.chunks?.length) {
+              return doc.chunks.slice(0, 10).join('\n\n');
+            }
+            return doc.content.slice(0, 5000); // Fallback limit for non-chunked docs
+          })
+          .join('\n\n=== Nächstes Dokument ===\n\n');
       }
 
       // Get API settings from localStorage
@@ -129,7 +126,7 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
               role: 'system',
               content: chatMode === 'general'
                 ? 'Du bist ein hilfreicher Assistent, der Fragen beantwortet.'
-                : `Du bist ein hilfreicher Assistent, der Fragen zu einem Dokument beantwortet. Hier ist der Dokumentinhalt: ${documentContent}`
+                : `Du bist ein hilfreicher Assistent, der Fragen zu ${chatMode === 'all' ? 'den verfügbaren Dokumenten' : 'einem Dokument'} beantwortet. Hier ist der Dokumentinhalt: ${documentContent}`
             },
             {
               role: 'user',
@@ -189,8 +186,28 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
                 }`}
               >
                 <MessageSquare className="w-4 h-4 mr-2" />
-                Allgemeiner Chat
+                Ohne Dokumente
               </button>
+              {documents.length > 0 && (
+                <button
+                  onClick={() => {
+                    setChatMode('all');
+                    setSelectedDocument(undefined);
+                    setMessages([{
+                      role: 'assistant',
+                      content: 'Ich kann Ihnen Fragen zu allen verfügbaren Dokumenten beantworten.'
+                    }]);
+                  }}
+                  className={`flex items-center px-3 py-2 text-sm font-medium rounded-md ${
+                    chatMode === 'all'
+                      ? 'bg-indigo-100 text-indigo-700'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  <MessageSquare className="w-4 h-4 mr-2" />
+                  Alle Dokumente
+                </button>
+              )}
             </div>
             <select
               value={selectedDocument}
@@ -252,7 +269,7 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
               <DocumentUpload
                 onDocumentsProcessed={() => {
                   setShowUpload(false);
-                  void loadDocuments(); // Reload documents after upload
+                  void loadDocuments();
                 }}
               />
             </div>
@@ -283,21 +300,10 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
               className={`max-w-[80%] rounded-lg px-4 py-2 ${
                 message.role === 'user'
                   ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-100 text-gray-900 prose prose-sm max-w-none'
+                  : 'bg-gray-100 text-gray-900'
               }`}
             >
-              {message.role === 'user' ? (
-                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-              ) : (
-                <ReactMarkdown 
-                  className="text-sm [&>p]:mb-4 [&>p:last-child]:mb-0 [&>ul]:mb-4 [&>ol]:mb-4 [&>blockquote]:mb-4"
-                  components={{
-                    p: ({ children }) => <p className="whitespace-pre-wrap">{children}</p>
-                  }}
-                >
-                  {message.content}
-                </ReactMarkdown>
-              )}
+              <p className="text-sm whitespace-pre-wrap">{message.content}</p>
             </div>
           </div>
         ))}
@@ -313,13 +319,15 @@ export default function DocumentChat({ documentId }: DocumentChatProps) {
             placeholder={
               chatMode === 'general'
                 ? "Stellen Sie eine Frage..."
-                : selectedDocument
+                : chatMode === 'document' && selectedDocument
                 ? "Stellen Sie eine Frage zum Dokument..."
+                : chatMode === 'all'
+                ? "Stellen Sie eine Frage zu allen Dokumenten..."
                 : documents.length > 0 
                   ? "Bitte wählen Sie ein Dokument aus oder nutzen Sie den allgemeinen Chat" 
                   : "Laden Sie zuerst ein Dokument hoch oder nutzen Sie den allgemeinen Chat"
             }
-            className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 min-h-[42px]"
+            className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             disabled={isLoading || (chatMode === 'document' && !selectedDocument)}
           />
           <button
